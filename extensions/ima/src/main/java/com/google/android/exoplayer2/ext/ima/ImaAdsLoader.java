@@ -514,7 +514,8 @@ public final class ImaAdsLoader implements AdsLoader {
                 MimeTypes.VIDEO_WEBM,
                 MimeTypes.VIDEO_H263,
                 MimeTypes.AUDIO_MP4,
-                MimeTypes.AUDIO_MPEG));
+                MimeTypes.AUDIO_MPEG,
+                MimeTypes.AUDIO_MPEG_TS));
       }
     }
     this.supportedMimeTypes = Collections.unmodifiableList(supportedMimeTypes);

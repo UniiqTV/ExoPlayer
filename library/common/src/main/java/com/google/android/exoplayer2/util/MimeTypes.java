@@ -63,6 +63,7 @@ public final class MimeTypes {
   public static final String AUDIO_MATROSKA = BASE_TYPE_AUDIO + "/x-matroska";
   public static final String AUDIO_WEBM = BASE_TYPE_AUDIO + "/webm";
   public static final String AUDIO_MPEG = BASE_TYPE_AUDIO + "/mpeg";
+  public static final String AUDIO_MPEG_TS = BASE_TYPE_AUDIO + "/mp2a";
   public static final String AUDIO_MPEG_L1 = BASE_TYPE_AUDIO + "/mpeg-L1";
   public static final String AUDIO_MPEG_L2 = BASE_TYPE_AUDIO + "/mpeg-L2";
   public static final String AUDIO_MPEGH_MHA1 = BASE_TYPE_AUDIO + "/mha1";

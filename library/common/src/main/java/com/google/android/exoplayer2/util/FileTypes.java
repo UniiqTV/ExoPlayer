@@ -150,6 +150,7 @@ public final class FileTypes {
       case MimeTypes.APPLICATION_WEBM:
         return FileTypes.MATROSKA;
       case MimeTypes.AUDIO_MPEG:
+      case MimeTypes.AUDIO_MPEG_TS:
         return FileTypes.MP3;
       case MimeTypes.VIDEO_MP4:
       case MimeTypes.AUDIO_MP4:

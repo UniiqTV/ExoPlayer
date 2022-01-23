@@ -78,6 +78,7 @@ public final class ShadowMediaCodecConfig extends ExternalResource {
     configureCodec("exotest.audio.mpegl2", MimeTypes.AUDIO_MPEG_L2);
     configureCodec("exotest.audio.opus", MimeTypes.AUDIO_OPUS);
     configureCodec("exotest.audio.vorbis", MimeTypes.AUDIO_VORBIS);
+    configureCodec("exotest.audio.mp2a", MimeTypes.AUDIO_MPEG_TS);
 
     // Raw audio should use a bypass mode and never need this codec. However, to easily assert
     // failures of the bypass mode we want to detect when the raw audio is decoded by this class and

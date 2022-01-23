@@ -622,6 +622,7 @@ public final class MediaCodecInfo {
       return maxChannelCount;
     }
     if (MimeTypes.AUDIO_MPEG.equals(mimeType)
+        || MimeTypes.AUDIO_MPEG_TS.equals(mimeType)
         || MimeTypes.AUDIO_AMR_NB.equals(mimeType)
         || MimeTypes.AUDIO_AMR_WB.equals(mimeType)
         || MimeTypes.AUDIO_AAC.equals(mimeType)

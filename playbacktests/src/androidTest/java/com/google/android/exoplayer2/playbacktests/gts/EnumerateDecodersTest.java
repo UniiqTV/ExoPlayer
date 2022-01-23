@@ -68,6 +68,7 @@ public class EnumerateDecodersTest {
     enumerateDecoders(MimeTypes.AUDIO_MPEG);
     enumerateDecoders(MimeTypes.AUDIO_MPEG_L1);
     enumerateDecoders(MimeTypes.AUDIO_MPEG_L2);
+    enumerateDecoders(MimeTypes.AUDIO_MPEG_TS);
     enumerateDecoders(MimeTypes.AUDIO_RAW);
     enumerateDecoders(MimeTypes.AUDIO_ALAW);
     enumerateDecoders(MimeTypes.AUDIO_MLAW);

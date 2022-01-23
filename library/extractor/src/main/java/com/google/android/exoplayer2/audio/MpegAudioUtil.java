@@ -216,7 +216,7 @@ public final class MpegAudioUtil {
   public static final int MAX_RATE_BYTES_PER_SECOND = 320 * 1000 / 8;
 
   private static final String[] MIME_TYPE_BY_LAYER =
-      new String[] {MimeTypes.AUDIO_MPEG_L1, MimeTypes.AUDIO_MPEG_L2, MimeTypes.AUDIO_MPEG};
+      new String[] {MimeTypes.AUDIO_MPEG_L1, MimeTypes.AUDIO_MPEG_L2, MimeTypes.AUDIO_MPEG, MimeTypes.AUDIO_MPEG_TS};
   private static final int[] SAMPLING_RATE_V1 = {44100, 48000, 32000};
   private static final int[] BITRATE_V1_L1 = {
     32000, 64000, 96000, 128000, 160000, 192000, 224000, 256000, 288000, 320000, 352000, 384000,

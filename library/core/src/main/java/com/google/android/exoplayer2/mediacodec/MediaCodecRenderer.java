@@ -1053,7 +1053,8 @@ public abstract class MediaCodecRenderer extends BaseRenderer {
     String mimeType = format.sampleMimeType;
     if (!MimeTypes.AUDIO_AAC.equals(mimeType)
         && !MimeTypes.AUDIO_MPEG.equals(mimeType)
-        && !MimeTypes.AUDIO_OPUS.equals(mimeType)) {
+        && !MimeTypes.AUDIO_OPUS.equals(mimeType)
+        && !MimeTypes.AUDIO_MPEG_TS.equals(mimeType)) {
       // TODO(b/154746451): Batching provokes frame drops in non offload.
       bypassBatchBuffer.setMaxSampleCount(1);
     } else {
