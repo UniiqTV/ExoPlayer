@@ -23,9 +23,9 @@ import static com.google.android.exoplayer2.DefaultLoadControl.DEFAULT_MIN_BUFFE
 import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
 import static com.google.android.exoplayer2.util.Assertions.checkState;
 import static java.lang.Math.min;
+import static java.lang.annotation.ElementType.TYPE_USE;
 
 import android.content.Context;
-import android.graphics.Matrix;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
@@ -62,6 +62,7 @@ import java.io.IOException;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 /**
@@ -221,24 +222,6 @@ public final class Transformer {
       return this;
     }
 
-    /** @deprecated Use {@link TransformationRequest.Builder#setResolution(int)} instead. */
-    @Deprecated
-    public Builder setResolution(int outputHeight) {
-      transformationRequest = transformationRequest.buildUpon().setResolution(outputHeight).build();
-      return this;
-    }
-
-    /**
-     * @deprecated Use {@link TransformationRequest.Builder#setTransformationMatrix(Matrix)}
-     *     instead.
-     */
-    @Deprecated
-    public Builder setTransformationMatrix(Matrix transformationMatrix) {
-      transformationRequest =
-          transformationRequest.buildUpon().setTransformationMatrix(transformationMatrix).build();
-      return this;
-    }
-
     /**
      * @deprecated This feature will be removed in a following release and the MIME type of the
      *     output will always be MP4.
@@ -246,22 +229,6 @@ public final class Transformer {
     @Deprecated
     public Builder setOutputMimeType(String outputMimeType) {
       this.containerMimeType = outputMimeType;
-      return this;
-    }
-
-    /** @deprecated Use {@link TransformationRequest.Builder#setVideoMimeType(String)} instead. */
-    @Deprecated
-    public Builder setVideoMimeType(String videoMimeType) {
-      transformationRequest =
-          transformationRequest.buildUpon().setVideoMimeType(videoMimeType).build();
-      return this;
-    }
-
-    /** @deprecated Use {@link TransformationRequest.Builder#setAudioMimeType(String)} instead. */
-    @Deprecated
-    public Builder setAudioMimeType(String audioMimeType) {
-      transformationRequest =
-          transformationRequest.buildUpon().setAudioMimeType(audioMimeType).build();
       return this;
     }
 
@@ -501,6 +468,7 @@ public final class Transformer {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({
     PROGRESS_STATE_WAITING_FOR_AVAILABILITY,
     PROGRESS_STATE_AVAILABLE,
@@ -537,7 +505,8 @@ public final class Transformer {
 
   @Nullable private MuxerWrapper muxerWrapper;
   @Nullable private ExoPlayer player;
-  @ProgressState private int progressState;
+  private @ProgressState int progressState;
+  private boolean isCancelling;
 
   private Transformer(
       Context context,
@@ -692,7 +661,7 @@ public final class Transformer {
                 DEFAULT_BUFFER_FOR_PLAYBACK_MS / 10,
                 DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS / 10)
             .build();
-    player =
+    ExoPlayer.Builder playerBuilder =
         new ExoPlayer.Builder(
                 context,
                 new TransformerRenderersFactory(
@@ -703,13 +672,20 @@ public final class Transformer {
                     transformationRequest,
                     encoderFactory,
                     decoderFactory,
+                    new FallbackListener(mediaItem, listeners, transformationRequest),
                     debugViewProvider))
             .setMediaSourceFactory(mediaSourceFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
-            .setLooper(looper)
-            .setClock(clock)
-            .build();
+            .setLooper(looper);
+    if (clock != Clock.DEFAULT) {
+      // Transformer.Builder#setClock is also @VisibleForTesting, so if we're using a non-default
+      // clock we must be in a test context.
+      @SuppressWarnings("VisibleForTests")
+      ExoPlayer.Builder unusedForAnnotation = playerBuilder.setClock(clock);
+    }
+
+    player = playerBuilder.build();
     player.setMediaItem(mediaItem);
     player.addListener(new TransformerPlayerListener(mediaItem, muxerWrapper));
     player.prepare();
@@ -737,8 +713,7 @@ public final class Transformer {
    * @return The {@link ProgressState}.
    * @throws IllegalStateException If this method is called from the wrong thread.
    */
-  @ProgressState
-  public int getProgress(ProgressHolder progressHolder) {
+  public @ProgressState int getProgress(ProgressHolder progressHolder) {
     verifyApplicationThread();
     if (progressState == PROGRESS_STATE_AVAILABLE) {
       Player player = checkNotNull(this.player);
@@ -755,11 +730,13 @@ public final class Transformer {
    * @throws IllegalStateException If this method is called from the wrong thread.
    */
   public void cancel() {
+    isCancelling = true;
     try {
       releaseResources(/* forCancellation= */ true);
     } catch (TransformationException impossible) {
       throw new IllegalStateException(impossible);
     }
+    isCancelling = false;
   }
 
   /**
@@ -773,6 +750,7 @@ public final class Transformer {
    */
   private void releaseResources(boolean forCancellation) throws TransformationException {
     verifyApplicationThread();
+    progressState = PROGRESS_STATE_NO_TRANSFORMATION;
     if (player != null) {
       player.release();
       player = null;
@@ -786,7 +764,6 @@ public final class Transformer {
       }
       muxerWrapper = null;
     }
-    progressState = PROGRESS_STATE_NO_TRANSFORMATION;
   }
 
   private void verifyApplicationThread() {
@@ -805,6 +782,7 @@ public final class Transformer {
     private final TransformationRequest transformationRequest;
     private final Codec.EncoderFactory encoderFactory;
     private final Codec.DecoderFactory decoderFactory;
+    private final FallbackListener fallbackListener;
     private final Transformer.DebugViewProvider debugViewProvider;
 
     public TransformerRenderersFactory(
@@ -815,6 +793,7 @@ public final class Transformer {
         TransformationRequest transformationRequest,
         Codec.EncoderFactory encoderFactory,
         Codec.DecoderFactory decoderFactory,
+        FallbackListener fallbackListener,
         Transformer.DebugViewProvider debugViewProvider) {
       this.context = context;
       this.muxerWrapper = muxerWrapper;
@@ -823,6 +802,7 @@ public final class Transformer {
       this.transformationRequest = transformationRequest;
       this.encoderFactory = encoderFactory;
       this.decoderFactory = decoderFactory;
+      this.fallbackListener = fallbackListener;
       this.debugViewProvider = debugViewProvider;
       mediaClock = new TransformerMediaClock();
     }
@@ -840,7 +820,12 @@ public final class Transformer {
       if (!removeAudio) {
         renderers[index] =
             new TransformerAudioRenderer(
-                muxerWrapper, mediaClock, transformationRequest, encoderFactory, decoderFactory);
+                muxerWrapper,
+                mediaClock,
+                transformationRequest,
+                encoderFactory,
+                decoderFactory,
+                fallbackListener);
         index++;
       }
       if (!removeVideo) {
@@ -852,6 +837,7 @@ public final class Transformer {
                 transformationRequest,
                 encoderFactory,
                 decoderFactory,
+                fallbackListener,
                 debugViewProvider);
         index++;
       }
@@ -907,11 +893,20 @@ public final class Transformer {
 
     @Override
     public void onPlayerError(PlaybackException error) {
-      Throwable cause = error.getCause();
-      handleTransformationEnded(
+      @Nullable Throwable cause = error.getCause();
+      TransformationException transformationException =
           cause instanceof TransformationException
               ? (TransformationException) cause
-              : TransformationException.createForPlaybackException(error));
+              : TransformationException.createForPlaybackException(error);
+      if (isCancelling) {
+        // Resources are already being released.
+        listeners.queueEvent(
+            /* eventFlag= */ C.INDEX_UNSET,
+            listener -> listener.onTransformationError(mediaItem, transformationException));
+        listeners.flushEvents();
+      } else {
+        handleTransformationEnded(transformationException);
+      }
     }
 
     private void handleTransformationEnded(@Nullable TransformationException exception) {
@@ -923,26 +918,24 @@ public final class Transformer {
       } catch (RuntimeException e) {
         resourceReleaseException = TransformationException.createForUnexpected(e);
       }
-
-      if (exception == null && resourceReleaseException == null) {
-        // TODO(b/213341814): Add event flags for Transformer events.
-        listeners.queueEvent(
-            /* eventFlag= */ C.INDEX_UNSET,
-            listener -> listener.onTransformationCompleted(mediaItem));
-        listeners.flushEvents();
-        return;
+      if (exception == null) {
+        // We only report the exception caused by releasing the resources if there is no other
+        // exception. It is more intuitive to call the error callback only once and reporting the
+        // exception caused by releasing the resources can be confusing if it is a consequence of
+        // the first exception.
+        exception = resourceReleaseException;
       }
 
       if (exception != null) {
+        TransformationException finalException = exception;
+        // TODO(b/213341814): Add event flags for Transformer events.
         listeners.queueEvent(
             /* eventFlag= */ C.INDEX_UNSET,
-            listener -> listener.onTransformationError(mediaItem, exception));
-      }
-      if (resourceReleaseException != null) {
-        TransformationException finalResourceReleaseException = resourceReleaseException;
+            listener -> listener.onTransformationError(mediaItem, finalException));
+      } else {
         listeners.queueEvent(
             /* eventFlag= */ C.INDEX_UNSET,
-            listener -> listener.onTransformationError(mediaItem, finalResourceReleaseException));
+            listener -> listener.onTransformationCompleted(mediaItem));
       }
       listeners.flushEvents();
     }

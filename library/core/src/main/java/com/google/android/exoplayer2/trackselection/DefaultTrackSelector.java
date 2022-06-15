@@ -15,6 +15,7 @@
  */
 package com.google.android.exoplayer2.trackselection;
 
+import static java.lang.annotation.ElementType.TYPE_USE;
 import static java.util.Collections.max;
 
 import android.annotation.SuppressLint;
@@ -54,6 +55,7 @@ import com.google.common.primitives.Ints;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -116,7 +118,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
     private boolean allowAudioMixedChannelCountAdaptiveness;
     private boolean allowAudioMixedDecoderSupportAdaptiveness;
     // Text
-    @C.SelectionFlags private int disabledTextTrackSelectionFlags;
+    private @C.SelectionFlags int disabledTextTrackSelectionFlags;
     // General
     private boolean exceedRendererCapabilitiesIfNecessary;
     private boolean tunnelingEnabled;
@@ -887,7 +889,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
      * Bitmask of selection flags that are disabled for text track selections. See {@link
      * C.SelectionFlags}. The default value is {@code 0} (i.e. no flags).
      */
-    @C.SelectionFlags public final int disabledTextTrackSelectionFlags;
+    public final @C.SelectionFlags int disabledTextTrackSelectionFlags;
 
     /** Returns an instance configured with default values. */
     public static Parameters getDefaults(Context context) {
@@ -1113,6 +1115,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
 
     @Documented
     @Retention(RetentionPolicy.SOURCE)
+    @Target(TYPE_USE)
     @IntDef({
       FIELD_EXCEED_VIDEO_CONSTRAINTS_IF_NECESSARY,
       FIELD_ALLOW_VIDEO_MIXED_MIME_TYPE_ADAPTIVENESS,
@@ -1373,6 +1376,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
 
     @Documented
     @Retention(RetentionPolicy.SOURCE)
+    @Target(TYPE_USE)
     @IntDef({
       FIELD_GROUP_INDEX,
       FIELD_TRACKS,
@@ -1416,6 +1420,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({SELECTION_ELIGIBILITY_NO, SELECTION_ELIGIBILITY_FIXED, SELECTION_ELIGIBILITY_ADAPTIVE})
   protected @interface SelectionEligibility {}
 
@@ -2242,8 +2247,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
     }
 
     /** Returns to what extent the track is {@link SelectionEligibility eligible for selection}. */
-    @SelectionEligibility
-    public abstract int getSelectionEligibility();
+    public abstract @SelectionEligibility int getSelectionEligibility();
 
     /**
      * Returns whether this track is compatible for an adaptive selection with the specified other
@@ -2295,7 +2299,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
     private final int preferredRoleFlagsScore;
     private final boolean hasMainOrNoRoleFlag;
     private final boolean allowMixedMimeTypes;
-    @SelectionEligibility private final int selectionEligibility;
+    private final @SelectionEligibility int selectionEligibility;
     private final boolean usesPrimaryDecoder;
     private final boolean usesHardwareAcceleration;
     private final int codecPreferenceScore;
@@ -2362,8 +2366,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
     }
 
     @Override
-    @SelectionEligibility
-    public int getSelectionEligibility() {
+    public @SelectionEligibility int getSelectionEligibility() {
       return selectionEligibility;
     }
 
@@ -2376,8 +2379,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
                   && this.usesHardwareAcceleration == otherTrack.usesHardwareAcceleration));
     }
 
-    @SelectionEligibility
-    private int evaluateSelectionEligibility(
+    private @SelectionEligibility int evaluateSelectionEligibility(
         @Capabilities int rendererSupport, @AdaptiveSupport int requiredAdaptiveSupport) {
       if ((format.roleFlags & C.ROLE_FLAG_TRICK_PLAY) != 0) {
         // Ignore trick-play tracks for now.
@@ -2489,7 +2491,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
       return listBuilder.build();
     }
 
-    @SelectionEligibility private final int selectionEligibility;
+    private final @SelectionEligibility int selectionEligibility;
     private final boolean isWithinConstraints;
     @Nullable private final String language;
     private final Parameters parameters;
@@ -2581,8 +2583,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
     }
 
     @Override
-    @SelectionEligibility
-    public int getSelectionEligibility() {
+    public @SelectionEligibility int getSelectionEligibility() {
       return selectionEligibility;
     }
 
@@ -2651,8 +2652,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
           .result();
     }
 
-    @SelectionEligibility
-    private int evaluateSelectionEligibility(
+    private @SelectionEligibility int evaluateSelectionEligibility(
         @Capabilities int rendererSupport, boolean hasMappedVideoTracks) {
       if (!isSupported(rendererSupport, parameters.exceedRendererCapabilitiesIfNecessary)) {
         return SELECTION_ELIGIBILITY_NO;
@@ -2699,7 +2699,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
       return listBuilder.build();
     }
 
-    @SelectionEligibility private final int selectionEligibility;
+    private final @SelectionEligibility int selectionEligibility;
     private final boolean isWithinRendererCapabilities;
     private final boolean isDefault;
     private final boolean isForced;
@@ -2764,8 +2764,7 @@ public class DefaultTrackSelector extends MappingTrackSelector {
     }
 
     @Override
-    @SelectionEligibility
-    public int getSelectionEligibility() {
+    public @SelectionEligibility int getSelectionEligibility() {
       return selectionEligibility;
     }
 

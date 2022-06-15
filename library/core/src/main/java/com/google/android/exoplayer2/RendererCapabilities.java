@@ -15,11 +15,14 @@
  */
 package com.google.android.exoplayer2;
 
+import static java.lang.annotation.ElementType.TYPE_USE;
+
 import android.annotation.SuppressLint;
 import androidx.annotation.IntDef;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
 /** Defines the capabilities of a {@link Renderer}. */
 public interface RendererCapabilities {
@@ -28,6 +31,7 @@ public interface RendererCapabilities {
   @SuppressWarnings("deprecation")
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({
     FORMAT_HANDLED,
     FORMAT_EXCEEDS_CAPABILITIES,
@@ -56,6 +60,7 @@ public interface RendererCapabilities {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({ADAPTIVE_SEAMLESS, ADAPTIVE_NOT_SEAMLESS, ADAPTIVE_NOT_SUPPORTED})
   @interface AdaptiveSupport {}
 
@@ -77,6 +82,7 @@ public interface RendererCapabilities {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({TUNNELING_SUPPORTED, TUNNELING_NOT_SUPPORTED})
   @interface TunnelingSupport {}
 
@@ -95,6 +101,7 @@ public interface RendererCapabilities {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({
     HARDWARE_ACCELERATION_SUPPORTED,
     HARDWARE_ACCELERATION_NOT_SUPPORTED,
@@ -115,6 +122,7 @@ public interface RendererCapabilities {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({
     DECODER_SUPPORT_PRIMARY,
     DECODER_SUPPORT_FALLBACK,
@@ -163,6 +171,7 @@ public interface RendererCapabilities {
   @Documented
   @Retention(RetentionPolicy.SOURCE)
   // Intentionally empty to prevent assignment or comparison with individual flags without masking.
+  @Target(TYPE_USE)
   @IntDef({})
   @interface Capabilities {}
 
@@ -178,8 +187,7 @@ public interface RendererCapabilities {
    * @return The combined {@link Capabilities} of the given {@link C.FormatSupport}, {@link
    *     #ADAPTIVE_NOT_SUPPORTED} and {@link #TUNNELING_NOT_SUPPORTED}.
    */
-  @Capabilities
-  static int create(@C.FormatSupport int formatSupport) {
+  static @Capabilities int create(@C.FormatSupport int formatSupport) {
     return create(formatSupport, ADAPTIVE_NOT_SUPPORTED, TUNNELING_NOT_SUPPORTED);
   }
 
@@ -195,8 +203,7 @@ public interface RendererCapabilities {
    * @param tunnelingSupport The {@link TunnelingSupport}.
    * @return The combined {@link Capabilities}.
    */
-  @Capabilities
-  static int create(
+  static @Capabilities int create(
       @C.FormatSupport int formatSupport,
       @AdaptiveSupport int adaptiveSupport,
       @TunnelingSupport int tunnelingSupport) {
@@ -222,8 +229,7 @@ public interface RendererCapabilities {
    */
   // Suppression needed for IntDef casting.
   @SuppressLint("WrongConstant")
-  @Capabilities
-  static int create(
+  static @Capabilities int create(
       @C.FormatSupport int formatSupport,
       @AdaptiveSupport int adaptiveSupport,
       @TunnelingSupport int tunnelingSupport,
@@ -244,8 +250,7 @@ public interface RendererCapabilities {
    */
   // Suppression needed for IntDef casting.
   @SuppressLint("WrongConstant")
-  @C.FormatSupport
-  static int getFormatSupport(@Capabilities int supportFlags) {
+  static @C.FormatSupport int getFormatSupport(@Capabilities int supportFlags) {
     return supportFlags & FORMAT_SUPPORT_MASK;
   }
 
@@ -257,8 +262,7 @@ public interface RendererCapabilities {
    */
   // Suppression needed for IntDef casting.
   @SuppressLint("WrongConstant")
-  @AdaptiveSupport
-  static int getAdaptiveSupport(@Capabilities int supportFlags) {
+  static @AdaptiveSupport int getAdaptiveSupport(@Capabilities int supportFlags) {
     return supportFlags & ADAPTIVE_SUPPORT_MASK;
   }
 
@@ -270,8 +274,7 @@ public interface RendererCapabilities {
    */
   // Suppression needed for IntDef casting.
   @SuppressLint("WrongConstant")
-  @TunnelingSupport
-  static int getTunnelingSupport(@Capabilities int supportFlags) {
+  static @TunnelingSupport int getTunnelingSupport(@Capabilities int supportFlags) {
     return supportFlags & TUNNELING_SUPPORT_MASK;
   }
 
@@ -283,8 +286,8 @@ public interface RendererCapabilities {
    */
   // Suppression needed for IntDef casting.
   @SuppressLint("WrongConstant")
-  @HardwareAccelerationSupport
-  static int getHardwareAccelerationSupport(@Capabilities int supportFlags) {
+  static @HardwareAccelerationSupport int getHardwareAccelerationSupport(
+      @Capabilities int supportFlags) {
     return supportFlags & HARDWARE_ACCELERATION_SUPPORT_MASK;
   }
 
@@ -296,8 +299,7 @@ public interface RendererCapabilities {
    */
   // Suppression needed for IntDef casting.
   @SuppressLint("WrongConstant")
-  @DecoderSupport
-  static int getDecoderSupport(@Capabilities int supportFlags) {
+  static @DecoderSupport int getDecoderSupport(@Capabilities int supportFlags) {
     return supportFlags & MODE_SUPPORT_MASK;
   }
 

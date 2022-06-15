@@ -135,7 +135,7 @@ public final class CastPlayer extends BasePlayer {
   private final SeekResultCallback seekResultCallback;
 
   // Listeners and notification.
-  private final ListenerSet<Player.EventListener> listeners;
+  private final ListenerSet<Listener> listeners;
   @Nullable private SessionAvailabilityListener sessionAvailabilityListener;
 
   // Internal state.
@@ -148,7 +148,7 @@ public final class CastPlayer extends BasePlayer {
   private TrackSelectionArray currentTrackSelection;
   private TracksInfo currentTracksInfo;
   private Commands availableCommands;
-  @Player.State private int playbackState;
+  private @Player.State int playbackState;
   private int currentWindowIndex;
   private long lastReportedPositionMs;
   private int pendingSeekCount;
@@ -278,41 +278,11 @@ public final class CastPlayer extends BasePlayer {
 
   @Override
   public void addListener(Listener listener) {
-    EventListener eventListener = listener;
-    addListener(eventListener);
-  }
-
-  /**
-   * Registers a listener to receive events from the player.
-   *
-   * <p>The listener's methods will be called on the thread associated with {@link
-   * #getApplicationLooper()}.
-   *
-   * @param listener The listener to register.
-   * @deprecated Use {@link #addListener(Listener)} and {@link #removeListener(Listener)} instead.
-   */
-  @Deprecated
-  @SuppressWarnings("deprecation")
-  public void addListener(EventListener listener) {
     listeners.add(listener);
   }
 
   @Override
   public void removeListener(Listener listener) {
-    EventListener eventListener = listener;
-    removeListener(eventListener);
-  }
-
-  /**
-   * Unregister a listener registered through {@link #addListener(EventListener)}. The listener will
-   * no longer receive events from the player.
-   *
-   * @param listener The listener to unregister.
-   * @deprecated Use {@link #addListener(Listener)} and {@link #removeListener(Listener)} instead.
-   */
-  @Deprecated
-  @SuppressWarnings("deprecation")
-  public void removeListener(EventListener listener) {
     listeners.remove(listener);
   }
 
@@ -385,14 +355,12 @@ public final class CastPlayer extends BasePlayer {
   }
 
   @Override
-  @Player.State
-  public int getPlaybackState() {
+  public @Player.State int getPlaybackState() {
     return playbackState;
   }
 
   @Override
-  @PlaybackSuppressionReason
-  public int getPlaybackSuppressionReason() {
+  public @PlaybackSuppressionReason int getPlaybackSuppressionReason() {
     return Player.PLAYBACK_SUPPRESSION_REASON_NONE;
   }
 
@@ -473,7 +441,7 @@ public final class CastPlayer extends BasePlayer {
       }
       updateAvailableCommandsAndNotifyIfChanged();
     } else if (pendingSeekCount == 0) {
-      listeners.queueEvent(/* eventFlag= */ C.INDEX_UNSET, EventListener::onSeekProcessed);
+      listeners.queueEvent(/* eventFlag= */ C.INDEX_UNSET, Listener::onSeekProcessed);
     }
     listeners.flushEvents();
   }
@@ -557,7 +525,7 @@ public final class CastPlayer extends BasePlayer {
     setRepeatModeAndNotifyIfChanged(repeatMode);
     listeners.flushEvents();
     PendingResult<MediaChannelResult> pendingResult =
-        remoteMediaClient.queueSetRepeatMode(getCastRepeatMode(repeatMode), /* jsonObject= */ null);
+        remoteMediaClient.queueSetRepeatMode(getCastRepeatMode(repeatMode), /* customData= */ null);
     this.repeatMode.pendingResultCallback =
         new ResultCallback<MediaChannelResult>() {
           @Override
@@ -572,8 +540,7 @@ public final class CastPlayer extends BasePlayer {
   }
 
   @Override
-  @RepeatMode
-  public int getRepeatMode() {
+  public @RepeatMode int getRepeatMode() {
     return repeatMode.value;
   }
 
@@ -1290,8 +1257,7 @@ public final class CastPlayer extends BasePlayer {
    * Retrieves the repeat mode from {@code remoteMediaClient} and maps it into a {@link
    * Player.RepeatMode}.
    */
-  @RepeatMode
-  private static int fetchRepeatMode(RemoteMediaClient remoteMediaClient) {
+  private static @RepeatMode int fetchRepeatMode(RemoteMediaClient remoteMediaClient) {
     MediaStatus mediaStatus = remoteMediaClient.getMediaStatus();
     if (mediaStatus == null) {
       // No media session active, yet.
@@ -1479,7 +1445,7 @@ public final class CastPlayer extends BasePlayer {
         currentWindowIndex = pendingSeekWindowIndex;
         pendingSeekWindowIndex = C.INDEX_UNSET;
         pendingSeekPositionMs = C.TIME_UNSET;
-        listeners.sendEvent(/* eventFlag= */ C.INDEX_UNSET, EventListener::onSeekProcessed);
+        listeners.sendEvent(/* eventFlag= */ C.INDEX_UNSET, Listener::onSeekProcessed);
       }
     }
   }

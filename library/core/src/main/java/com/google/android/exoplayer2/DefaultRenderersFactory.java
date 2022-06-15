@@ -15,6 +15,8 @@
  */
 package com.google.android.exoplayer2;
 
+import static java.lang.annotation.ElementType.TYPE_USE;
+
 import android.content.Context;
 import android.media.MediaCodec;
 import android.media.PlaybackParams;
@@ -42,6 +44,7 @@ import com.google.android.exoplayer2.video.spherical.CameraMotionRenderer;
 import java.lang.annotation.Documented;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 
@@ -60,6 +63,7 @@ public class DefaultRenderersFactory implements RenderersFactory {
    */
   @Documented
   @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
   @IntDef({EXTENSION_RENDERER_MODE_OFF, EXTENSION_RENDERER_MODE_ON, EXTENSION_RENDERER_MODE_PREFER})
   public @interface ExtensionRendererMode {}
   /** Do not allow use of extension renderers. */
@@ -89,7 +93,7 @@ public class DefaultRenderersFactory implements RenderersFactory {
 
   private final Context context;
   private final DefaultMediaCodecAdapterFactory codecAdapterFactory;
-  @ExtensionRendererMode private int extensionRendererMode;
+  private @ExtensionRendererMode int extensionRendererMode;
   private long allowedVideoJoiningTimeMs;
   private boolean enableDecoderFallback;
   private MediaCodecSelector mediaCodecSelector;
@@ -104,33 +108,6 @@ public class DefaultRenderersFactory implements RenderersFactory {
     extensionRendererMode = EXTENSION_RENDERER_MODE_OFF;
     allowedVideoJoiningTimeMs = DEFAULT_ALLOWED_VIDEO_JOINING_TIME_MS;
     mediaCodecSelector = MediaCodecSelector.DEFAULT;
-  }
-
-  /**
-   * @deprecated Use {@link #DefaultRenderersFactory(Context)} and {@link
-   *     #setExtensionRendererMode(int)}.
-   */
-  @Deprecated
-  @SuppressWarnings("deprecation")
-  public DefaultRenderersFactory(
-      Context context, @ExtensionRendererMode int extensionRendererMode) {
-    this(context, extensionRendererMode, DEFAULT_ALLOWED_VIDEO_JOINING_TIME_MS);
-  }
-
-  /**
-   * @deprecated Use {@link #DefaultRenderersFactory(Context)}, {@link
-   *     #setExtensionRendererMode(int)} and {@link #setAllowedVideoJoiningTimeMs(long)}.
-   */
-  @Deprecated
-  public DefaultRenderersFactory(
-      Context context,
-      @ExtensionRendererMode int extensionRendererMode,
-      long allowedVideoJoiningTimeMs) {
-    this.context = context;
-    this.extensionRendererMode = extensionRendererMode;
-    this.allowedVideoJoiningTimeMs = allowedVideoJoiningTimeMs;
-    mediaCodecSelector = MediaCodecSelector.DEFAULT;
-    codecAdapterFactory = new DefaultMediaCodecAdapterFactory();
   }
 
   /**
@@ -452,32 +429,6 @@ public class DefaultRenderersFactory implements RenderersFactory {
     } catch (Exception e) {
       // The extension is present, but instantiation failed.
       throw new RuntimeException("Error instantiating AV1 extension", e);
-    }
-
-    try {
-      // Full class names used for constructor args so the LINT rule triggers if any of them move.
-      Class<?> clazz =
-          Class.forName("com.google.android.exoplayer2.ext.ffmpeg.FfmpegVideoRenderer");
-      Constructor<?> constructor =
-          clazz.getConstructor(
-              long.class,
-              android.os.Handler.class,
-              com.google.android.exoplayer2.video.VideoRendererEventListener.class,
-              int.class);
-      Renderer renderer =
-          (Renderer)
-              constructor.newInstance(
-                  allowedVideoJoiningTimeMs,
-                  eventHandler,
-                  eventListener,
-                  MAX_DROPPED_VIDEO_FRAME_COUNT_TO_NOTIFY);
-      out.add(extensionRendererIndex++, renderer);
-      Log.i(TAG, "Loaded FfmpegVideoRenderer.");
-    } catch (ClassNotFoundException e) {
-      // Expected if the app was built without the extension.
-    } catch (Exception e) {
-      // The extension is present, but instantiation failed.
-      throw new RuntimeException("Error instantiating FFmpeg extension", e);
     }
   }
 

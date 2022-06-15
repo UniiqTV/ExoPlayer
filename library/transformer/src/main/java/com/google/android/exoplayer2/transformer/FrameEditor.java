@@ -16,6 +16,7 @@
 package com.google.android.exoplayer2.transformer;
 
 import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
+import static com.google.android.exoplayer2.util.Assertions.checkState;
 
 import android.content.Context;
 import android.graphics.Matrix;
@@ -50,6 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
    * @param pixelWidthHeightRatio The ratio of width over height, for each pixel.
    * @param transformationMatrix The transformation matrix to apply to each frame.
    * @param outputSurface The {@link Surface}.
+   * @param enableExperimentalHdrEditing Whether to attempt to process the input as an HDR signal.
    * @param debugViewProvider Provider for optional debug views to show intermediate output.
    * @return A configured {@code FrameEditor}.
    * @throws TransformationException If the {@code pixelWidthHeightRatio} isn't 1, reading shader
@@ -63,6 +65,7 @@ import java.util.concurrent.atomic.AtomicInteger;
       float pixelWidthHeightRatio,
       Matrix transformationMatrix,
       Surface outputSurface,
+      boolean enableExperimentalHdrEditing,
       Transformer.DebugViewProvider debugViewProvider)
       throws TransformationException {
     if (pixelWidthHeightRatio != 1.0f) {
@@ -84,18 +87,32 @@ import java.util.concurrent.atomic.AtomicInteger;
     EGLSurface eglSurface;
     int textureId;
     GlUtil.Program glProgram;
-    @Nullable EGLSurface debugPreviewEglSurface;
+    @Nullable EGLSurface debugPreviewEglSurface = null;
     try {
       eglDisplay = GlUtil.createEglDisplay();
-      eglContext = GlUtil.createEglContext(eglDisplay);
-      eglSurface = GlUtil.getEglSurface(eglDisplay, outputSurface);
+
+      if (enableExperimentalHdrEditing) {
+        eglContext = GlUtil.createEglContextEs3Rgba1010102(eglDisplay);
+        // TODO(b/209404935): Don't assume BT.2020 PQ input/output.
+        eglSurface = GlUtil.getEglSurfaceBt2020Pq(eglDisplay, outputSurface);
+        if (debugSurfaceView != null) {
+          debugPreviewEglSurface =
+              GlUtil.getEglSurfaceBt2020Pq(eglDisplay, checkNotNull(debugSurfaceView.getHolder()));
+        }
+      } else {
+        eglContext = GlUtil.createEglContext(eglDisplay);
+        eglSurface = GlUtil.getEglSurface(eglDisplay, outputSurface);
+        if (debugSurfaceView != null) {
+          debugPreviewEglSurface =
+              GlUtil.getEglSurface(eglDisplay, checkNotNull(debugSurfaceView.getHolder()));
+        }
+      }
+
       GlUtil.focusSurface(eglDisplay, eglContext, eglSurface, outputWidth, outputHeight);
       textureId = GlUtil.createExternalTexture();
-      glProgram = configureGlProgram(context, transformationMatrix, textureId);
-      debugPreviewEglSurface =
-          debugSurfaceView == null
-              ? null
-              : GlUtil.getEglSurface(eglDisplay, checkNotNull(debugSurfaceView.getHolder()));
+      glProgram =
+          configureGlProgram(
+              context, transformationMatrix, textureId, enableExperimentalHdrEditing);
     } catch (IOException | GlUtil.GlException e) {
       throw TransformationException.createForFrameEditor(
           e, TransformationException.ERROR_CODE_GL_INIT_FAILED);
@@ -125,11 +142,23 @@ import java.util.concurrent.atomic.AtomicInteger;
   }
 
   private static GlUtil.Program configureGlProgram(
-      Context context, Matrix transformationMatrix, int textureId) throws IOException {
+      Context context,
+      Matrix transformationMatrix,
+      int textureId,
+      boolean enableExperimentalHdrEditing)
+      throws IOException {
     // TODO(b/205002913): check the loaded program is consistent with the attributes
     // and uniforms expected in the code.
+    String vertexShaderFilePath =
+        enableExperimentalHdrEditing
+            ? VERTEX_SHADER_TRANSFORMATION_ES3_PATH
+            : VERTEX_SHADER_TRANSFORMATION_PATH;
+    String fragmentShaderFilePath =
+        enableExperimentalHdrEditing
+            ? FRAGMENT_SHADER_COPY_EXTERNAL_YUV_ES3_PATH
+            : FRAGMENT_SHADER_COPY_EXTERNAL_PATH;
     GlUtil.Program glProgram =
-        new GlUtil.Program(context, VERTEX_SHADER_FILE_PATH, FRAGMENT_SHADER_FILE_PATH);
+        new GlUtil.Program(context, vertexShaderFilePath, fragmentShaderFilePath);
 
     // Draw the frame on the entire normalized device coordinate space, from -1 to 1, for x and y.
     glProgram.setBufferAttribute(
@@ -137,6 +166,11 @@ import java.util.concurrent.atomic.AtomicInteger;
     glProgram.setBufferAttribute(
         "aTexCoords", GlUtil.getTextureCoordinateBounds(), GlUtil.RECTANGLE_VERTICES_COUNT);
     glProgram.setSamplerTexIdUniform("uTexSampler", textureId, /* unit= */ 0);
+
+    if (enableExperimentalHdrEditing) {
+      // In HDR editing mode the decoder output is sampled in YUV.
+      glProgram.setFloatsUniform("uColorTransform", MATRIX_YUV_TO_BT2020_COLOR_TRANSFORM);
+    }
 
     float[] transformationMatrixArray = getGlMatrixArray(transformationMatrix);
     glProgram.setFloatsUniform("uTransformationMatrix", transformationMatrixArray);
@@ -183,9 +217,21 @@ import java.util.concurrent.atomic.AtomicInteger;
     return matrix4x4Array;
   }
 
-  // Predefined shader values.
-  private static final String VERTEX_SHADER_FILE_PATH = "shaders/vertex_shader.glsl";
-  private static final String FRAGMENT_SHADER_FILE_PATH = "shaders/fragment_shader.glsl";
+  private static final String VERTEX_SHADER_TRANSFORMATION_PATH =
+      "shaders/vertex_shader_transformation.glsl";
+  private static final String FRAGMENT_SHADER_COPY_EXTERNAL_PATH =
+      "shaders/fragment_shader_copy_external.glsl";
+  private static final String VERTEX_SHADER_TRANSFORMATION_ES3_PATH =
+      "shaders/vertex_shader_transformation_es3.glsl";
+  private static final String FRAGMENT_SHADER_COPY_EXTERNAL_YUV_ES3_PATH =
+      "shaders/fragment_shader_copy_external_yuv_es3.glsl";
+  // Color transform coefficients from
+  // https://cs.android.com/android/platform/superproject/+/master:frameworks/av/media/libstagefright/colorconversion/ColorConverter.cpp;l=668-670;drc=487adf977a50cac3929eba15fad0d0f461c7ff0f.
+  private static final float[] MATRIX_YUV_TO_BT2020_COLOR_TRANSFORM = {
+    1.168f, 1.168f, 1.168f,
+    0.0f, -0.188f, 2.148f,
+    1.683f, -0.652f, 0.0f,
+  };
 
   private final float[] textureTransformMatrix;
   private final EGLDisplay eglDisplay;
@@ -193,6 +239,7 @@ import java.util.concurrent.atomic.AtomicInteger;
   private final EGLSurface eglSurface;
   private final int textureId;
   private final AtomicInteger pendingInputFrameCount;
+  private final AtomicInteger availableInputFrameCount;
   private final SurfaceTexture inputSurfaceTexture;
   private final Surface inputSurface;
   private final GlUtil.Program glProgram;
@@ -201,6 +248,8 @@ import java.util.concurrent.atomic.AtomicInteger;
   @Nullable private final EGLSurface debugPreviewEglSurface;
   private final int debugPreviewWidth;
   private final int debugPreviewHeight;
+
+  private boolean inputStreamEnded;
 
   private FrameEditor(
       EGLDisplay eglDisplay,
@@ -219,6 +268,7 @@ import java.util.concurrent.atomic.AtomicInteger;
     this.textureId = textureId;
     this.glProgram = glProgram;
     this.pendingInputFrameCount = new AtomicInteger();
+    this.availableInputFrameCount = new AtomicInteger();
     this.outputWidth = outputWidth;
     this.outputHeight = outputHeight;
     this.debugPreviewEglSurface = debugPreviewEglSurface;
@@ -227,7 +277,10 @@ import java.util.concurrent.atomic.AtomicInteger;
     textureTransformMatrix = new float[16];
     inputSurfaceTexture = new SurfaceTexture(textureId);
     inputSurfaceTexture.setOnFrameAvailableListener(
-        surfaceTexture -> pendingInputFrameCount.incrementAndGet());
+        surfaceTexture -> {
+          checkState(pendingInputFrameCount.getAndDecrement() > 0);
+          availableInputFrameCount.incrementAndGet();
+        });
     inputSurface = new Surface(inputSurfaceTexture);
   }
 
@@ -237,19 +290,34 @@ import java.util.concurrent.atomic.AtomicInteger;
   }
 
   /**
-   * Returns whether there is pending input data that can be processed by calling {@link
-   * #processData()}.
+   * Informs the frame editor that a frame will be queued to its input surface.
+   *
+   * <p>Should be called before rendering a frame to the frame editor's input surface.
+   *
+   * @throws IllegalStateException If called after {@link #signalEndOfInputStream()}.
    */
-  public boolean hasInputData() {
-    return pendingInputFrameCount.get() > 0;
+  public void registerInputFrame() {
+    checkState(!inputStreamEnded);
+    pendingInputFrameCount.incrementAndGet();
   }
 
   /**
-   * Processes pending input frame.
+   * Returns whether there is available input data that can be processed by calling {@link
+   * #processData()}.
+   */
+  public boolean canProcessData() {
+    return availableInputFrameCount.get() > 0;
+  }
+
+  /**
+   * Processes an input frame.
    *
    * @throws TransformationException If an OpenGL error occurs while processing the data.
+   * @throws IllegalStateException If there is no input data to process. Use {@link
+   *     #canProcessData()} to check whether input data is available.
    */
   public void processData() throws TransformationException {
+    checkState(canProcessData());
     try {
       inputSurfaceTexture.updateTexImage();
       inputSurfaceTexture.getTransformMatrix(textureTransformMatrix);
@@ -257,10 +325,9 @@ import java.util.concurrent.atomic.AtomicInteger;
       glProgram.bindAttributesAndUniforms();
 
       focusAndDrawQuad(eglSurface, outputWidth, outputHeight);
-      long surfaceTextureTimestampNs = inputSurfaceTexture.getTimestamp();
-      EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, surfaceTextureTimestampNs);
+      long presentationTimeNs = inputSurfaceTexture.getTimestamp();
+      EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, presentationTimeNs);
       EGL14.eglSwapBuffers(eglDisplay, eglSurface);
-      pendingInputFrameCount.decrementAndGet();
 
       if (debugPreviewEglSurface != null) {
         focusAndDrawQuad(debugPreviewEglSurface, debugPreviewWidth, debugPreviewHeight);
@@ -270,6 +337,7 @@ import java.util.concurrent.atomic.AtomicInteger;
       throw TransformationException.createForFrameEditor(
           e, TransformationException.ERROR_CODE_GL_PROCESSING_FAILED);
     }
+    availableInputFrameCount.decrementAndGet();
   }
 
   /** Releases all resources. */
@@ -286,5 +354,17 @@ import java.util.concurrent.atomic.AtomicInteger;
     GlUtil.focusSurface(eglDisplay, eglContext, eglSurface, width, height);
     // The four-vertex triangle strip forms a quad.
     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, /* first= */ 0, /* count= */ 4);
+  }
+
+  /** Returns whether all data has been processed. */
+  public boolean isEnded() {
+    return inputStreamEnded
+        && pendingInputFrameCount.get() == 0
+        && availableInputFrameCount.get() == 0;
+  }
+
+  /** Informs the {@code FrameEditor} that no further input data should be accepted. */
+  public void signalEndOfInputStream() {
+    inputStreamEnded = true;
   }
 }

@@ -890,8 +890,7 @@ public final class DownloadHelper {
       MediaItem mediaItem,
       DataSource.Factory dataSourceFactory,
       @Nullable DrmSessionManager drmSessionManager) {
-    return new DefaultMediaSourceFactory(
-            dataSourceFactory, ExtractorsFactory.EMPTY, /* serverSideDaiMediaSourceFactory= */ null)
+    return new DefaultMediaSourceFactory(dataSourceFactory, ExtractorsFactory.EMPTY)
         .setDrmSessionManagerProvider(
             drmSessionManager != null ? unusedMediaItem -> drmSessionManager : null)
         .createMediaSource(mediaItem);
@@ -1098,8 +1097,7 @@ public final class DownloadHelper {
     }
 
     @Override
-    @C.SelectionReason
-    public int getSelectionReason() {
+    public @C.SelectionReason int getSelectionReason() {
       return C.SELECTION_REASON_UNKNOWN;
     }
 

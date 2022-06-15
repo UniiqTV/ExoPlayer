@@ -109,7 +109,7 @@ public final class VideoFrameReleaseHelper {
   private float surfacePlaybackFrameRate;
 
   private float playbackSpeed;
-  @C.VideoChangeFrameRateStrategy private int changeFrameRateStrategy;
+  private @C.VideoChangeFrameRateStrategy int changeFrameRateStrategy;
 
   private long vsyncDurationNs;
   private long vsyncOffsetNs;
@@ -620,21 +620,30 @@ public final class VideoFrameReleaseHelper {
     }
 
     private void createChoreographerInstanceInternal() {
-      choreographer = Choreographer.getInstance();
+      try {
+        choreographer = Choreographer.getInstance();
+      } catch (RuntimeException e) {
+        // See [Internal: b/213926330].
+        Log.w(TAG, "Vsync sampling disabled due to platform error", e);
+      }
     }
 
     private void addObserverInternal() {
-      observerCount++;
-      if (observerCount == 1) {
-        checkNotNull(choreographer).postFrameCallback(this);
+      if (choreographer != null) {
+        observerCount++;
+        if (observerCount == 1) {
+          choreographer.postFrameCallback(this);
+        }
       }
     }
 
     private void removeObserverInternal() {
-      observerCount--;
-      if (observerCount == 0) {
-        checkNotNull(choreographer).removeFrameCallback(this);
-        sampledVsyncTimeNs = C.TIME_UNSET;
+      if (choreographer != null) {
+        observerCount--;
+        if (observerCount == 0) {
+          choreographer.removeFrameCallback(this);
+          sampledVsyncTimeNs = C.TIME_UNSET;
+        }
       }
     }
   }

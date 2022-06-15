@@ -16,6 +16,7 @@
 package com.google.android.exoplayer2.trackselection;
 
 import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 import androidx.annotation.CallSuper;
 import androidx.annotation.Nullable;
@@ -313,7 +314,7 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
 
   private float playbackSpeed;
   private int selectedIndex;
-  private int reason;
+  private @C.SelectionReason int reason;
   private long lastBufferEvaluationMs;
   @Nullable private MediaChunk lastBufferEvaluationMediaChunk;
 
@@ -446,7 +447,7 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
     }
 
     int previousSelectedIndex = selectedIndex;
-    int previousReason = reason;
+    @C.SelectionReason int previousReason = reason;
     int formatIndexOfPreviousChunk =
         queue.isEmpty() ? C.INDEX_UNSET : indexOf(Iterables.getLast(queue).trackFormat);
     if (formatIndexOfPreviousChunk != C.INDEX_UNSET) {
@@ -484,7 +485,7 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
   }
 
   @Override
-  public int getSelectionReason() {
+  public @C.SelectionReason int getSelectionReason() {
     return reason;
   }
 
@@ -602,10 +603,8 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
   }
 
   private long minDurationForQualityIncreaseUs(long availableDurationUs, long chunkDurationUs) {
-    boolean isAvailableDurationTooShort =
-        availableDurationUs != C.TIME_UNSET
-            && availableDurationUs <= minDurationForQualityIncreaseUs;
-    if (!isAvailableDurationTooShort) {
+    if (availableDurationUs == C.TIME_UNSET) {
+      // We are not in a live stream. Use the configured value.
       return minDurationForQualityIncreaseUs;
     }
     if (chunkDurationUs != C.TIME_UNSET) {
@@ -616,7 +615,9 @@ public class AdaptiveTrackSelection extends BaseTrackSelection {
       // actually achievable.
       availableDurationUs -= chunkDurationUs;
     }
-    return (long) (availableDurationUs * bufferedFractionToLiveEdgeForQualityIncrease);
+    long adjustedMinDurationForQualityIncreaseUs =
+        (long) (availableDurationUs * bufferedFractionToLiveEdgeForQualityIncrease);
+    return min(adjustedMinDurationForQualityIncreaseUs, minDurationForQualityIncreaseUs);
   }
 
   /**

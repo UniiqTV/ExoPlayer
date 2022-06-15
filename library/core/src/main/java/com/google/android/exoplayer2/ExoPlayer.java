@@ -16,7 +16,6 @@
 package com.google.android.exoplayer2;
 
 import static com.google.android.exoplayer2.util.Assertions.checkArgument;
-import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
 import static com.google.android.exoplayer2.util.Assertions.checkState;
 
 import android.content.Context;
@@ -32,6 +31,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import com.google.android.exoplayer2.analytics.AnalyticsCollector;
 import com.google.android.exoplayer2.analytics.AnalyticsListener;
+import com.google.android.exoplayer2.analytics.DefaultAnalyticsCollector;
 import com.google.android.exoplayer2.audio.AudioAttributes;
 import com.google.android.exoplayer2.audio.AudioSink;
 import com.google.android.exoplayer2.audio.AuxEffectInfo;
@@ -58,6 +58,7 @@ import com.google.android.exoplayer2.video.MediaCodecVideoRenderer;
 import com.google.android.exoplayer2.video.VideoFrameMetadataListener;
 import com.google.android.exoplayer2.video.VideoSize;
 import com.google.android.exoplayer2.video.spherical.CameraMotionListener;
+import com.google.common.base.Function;
 import com.google.common.base.Supplier;
 import java.util.List;
 
@@ -371,7 +372,7 @@ public interface ExoPlayer extends Player {
     /* package */ Supplier<TrackSelector> trackSelectorSupplier;
     /* package */ Supplier<LoadControl> loadControlSupplier;
     /* package */ Supplier<BandwidthMeter> bandwidthMeterSupplier;
-    /* package */ Supplier<AnalyticsCollector> analyticsCollectorSupplier;
+    /* package */ Function<Clock, AnalyticsCollector> analyticsCollectorFunction;
     /* package */ Looper looper;
     @Nullable /* package */ PriorityTaskManager priorityTaskManager;
     /* package */ AudioAttributes audioAttributes;
@@ -529,7 +530,7 @@ public interface ExoPlayer extends Player {
           () -> trackSelector,
           () -> loadControl,
           () -> bandwidthMeter,
-          () -> analyticsCollector);
+          (clock) -> analyticsCollector);
     }
 
     private Builder(
@@ -543,7 +544,7 @@ public interface ExoPlayer extends Player {
           () -> new DefaultTrackSelector(context),
           DefaultLoadControl::new,
           () -> DefaultBandwidthMeter.getSingletonInstance(context),
-          /* analyticsCollectorSupplier= */ null);
+          DefaultAnalyticsCollector::new);
     }
 
     private Builder(
@@ -553,17 +554,14 @@ public interface ExoPlayer extends Player {
         Supplier<TrackSelector> trackSelectorSupplier,
         Supplier<LoadControl> loadControlSupplier,
         Supplier<BandwidthMeter> bandwidthMeterSupplier,
-        @Nullable Supplier<AnalyticsCollector> analyticsCollectorSupplier) {
+        Function<Clock, AnalyticsCollector> analyticsCollectorFunction) {
       this.context = context;
       this.renderersFactorySupplier = renderersFactorySupplier;
       this.mediaSourceFactorySupplier = mediaSourceFactorySupplier;
       this.trackSelectorSupplier = trackSelectorSupplier;
       this.loadControlSupplier = loadControlSupplier;
       this.bandwidthMeterSupplier = bandwidthMeterSupplier;
-      this.analyticsCollectorSupplier =
-          analyticsCollectorSupplier != null
-              ? analyticsCollectorSupplier
-              : () -> new AnalyticsCollector(checkNotNull(clock));
+      this.analyticsCollectorFunction = analyticsCollectorFunction;
       looper = Util.getCurrentOrMainLooper();
       audioAttributes = AudioAttributes.DEFAULT;
       wakeMode = C.WAKE_MODE_NONE;
@@ -682,7 +680,7 @@ public interface ExoPlayer extends Player {
      */
     public Builder setAnalyticsCollector(AnalyticsCollector analyticsCollector) {
       checkState(!buildCalled);
-      this.analyticsCollectorSupplier = () -> analyticsCollector;
+      this.analyticsCollectorFunction = (clock) -> analyticsCollector;
       return this;
     }
 
@@ -958,7 +956,9 @@ public interface ExoPlayer extends Player {
      * @throws IllegalStateException If this method has already been called.
      */
     public ExoPlayer build() {
-      return buildSimpleExoPlayer();
+      checkState(!buildCalled);
+      buildCalled = true;
+      return new ExoPlayerImpl(/* builder= */ this, /* wrappingPlayer= */ null);
     }
 
     /* package */ SimpleExoPlayer buildSimpleExoPlayer() {
@@ -1018,30 +1018,6 @@ public interface ExoPlayer extends Player {
   DeviceComponent getDeviceComponent();
 
   /**
-   * Registers a listener to receive events from the player.
-   *
-   * <p>The listener's methods will be called on the thread associated with {@link
-   * #getApplicationLooper()}.
-   *
-   * @param listener The listener to register.
-   * @deprecated Use {@link #addListener(Listener)} and {@link #removeListener(Listener)} instead.
-   */
-  @Deprecated
-  @SuppressWarnings("deprecation")
-  void addListener(EventListener listener);
-
-  /**
-   * Unregister a listener registered through {@link #addListener(EventListener)}. The listener will
-   * no longer receive events from the player.
-   *
-   * @param listener The listener to unregister.
-   * @deprecated Use {@link #addListener(Listener)} and {@link #removeListener(Listener)} instead.
-   */
-  @Deprecated
-  @SuppressWarnings("deprecation")
-  void removeListener(EventListener listener);
-
-  /**
    * Adds a listener to receive audio offload events.
    *
    * @param listener The listener to register.
@@ -1086,6 +1062,14 @@ public interface ExoPlayer extends Player {
    */
   @C.TrackType
   int getRendererType(int index);
+
+  /**
+   * Returns the renderer at the given index.
+   *
+   * @param index The index of the renderer.
+   * @return The renderer at this index.
+   */
+  Renderer getRenderer(int index);
 
   /**
    * Returns the track selector that this player uses, or null if track selection is not supported.
@@ -1455,19 +1439,6 @@ public interface ExoPlayer extends Player {
    *     priority task manager.
    */
   void setPriorityTaskManager(@Nullable PriorityTaskManager priorityTaskManager);
-
-  /**
-   * Sets whether the player should throw an {@link IllegalStateException} when methods are called
-   * from a thread other than the one associated with {@link #getApplicationLooper()}.
-   *
-   * <p>The default is {@code true} and this method will be removed in the future.
-   *
-   * @param throwsWhenUsingWrongThread Whether to throw when methods are called from a wrong thread.
-   * @deprecated Disabling the enforcement can result in hard-to-detect bugs. Do not use this method
-   *     except to ease the transition while wrong thread access problems are fixed.
-   */
-  @Deprecated
-  void setThrowsWhenUsingWrongThread(boolean throwsWhenUsingWrongThread);
 
   /**
    * Sets whether audio offload scheduling is enabled. If enabled, ExoPlayer's main loop will run as

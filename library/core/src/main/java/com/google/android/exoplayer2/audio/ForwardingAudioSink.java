@@ -46,8 +46,7 @@ public class ForwardingAudioSink implements AudioSink {
   }
 
   @Override
-  @SinkFormatSupport
-  public int getFormatSupport(Format format) {
+  public @SinkFormatSupport int getFormatSupport(Format format) {
     return sink.getFormatSupport(format);
   }
 
@@ -117,6 +116,12 @@ public class ForwardingAudioSink implements AudioSink {
   @Override
   public void setAudioAttributes(AudioAttributes audioAttributes) {
     sink.setAudioAttributes(audioAttributes);
+  }
+
+  @Override
+  @Nullable
+  public AudioAttributes getAudioAttributes() {
+    return sink.getAudioAttributes();
   }
 
   @Override
