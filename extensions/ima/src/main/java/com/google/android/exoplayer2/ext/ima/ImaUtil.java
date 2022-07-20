@@ -54,10 +54,7 @@ import com.google.android.exoplayer2.upstream.DataSpec;
 import com.google.android.exoplayer2.util.Util;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.math.DoubleMath;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -401,13 +398,17 @@ import java.util.Set;
       long elapsedAdGroupAdDurationUs = 0;
       for (int j = periodIndex; j < contentTimeline.getPeriodCount(); j++) {
         contentTimeline.getPeriod(j, period, /* setIds= */ true);
-        if (totalElapsedContentDurationUs < adGroup.timeUs) {
+        // TODO(b/192231683) Remove subtracted US from ad group time when we can upgrade the SDK.
+        // Subtract one microsecond to work around rounding errors with adGroup.timeUs.
+        if (totalElapsedContentDurationUs < adGroup.timeUs - 1) {
           // Period starts before the ad group, so it is a content period.
           adPlaybackStates.put(checkNotNull(period.uid), contentOnlyAdPlaybackState);
           totalElapsedContentDurationUs += period.durationUs;
         } else {
           long periodStartUs = totalElapsedContentDurationUs + elapsedAdGroupAdDurationUs;
-          if (periodStartUs + period.durationUs <= adGroup.timeUs + adGroupDurationUs) {
+          // TODO(b/192231683) Remove additional US when we can upgrade the SDK.
+          // Add one microsecond to work around rounding errors with adGroup.timeUs.
+          if (periodStartUs + period.durationUs <= adGroup.timeUs + adGroupDurationUs + 1) {
             // The period ends before the end of the ad group, so it is an ad period (Note: A VOD ad
             // reported by the IMA SDK spans multiple periods before the LOADED event arrives).
             adPlaybackStates.put(
@@ -489,12 +490,16 @@ import java.util.Set;
       long elapsedAdGroupAdDurationUs = 0;
       for (int j = periodIndex; j < contentTimeline.getPeriodCount(); j++) {
         contentTimeline.getPeriod(j, period, /* setIds= */ true);
-        if (totalElapsedContentDurationUs < adGroup.timeUs) {
+        // TODO(b/192231683) Remove subtracted US from ad group time when we can upgrade the SDK.
+        // Subtract one microsecond to work around rounding errors with adGroup.timeUs.
+        if (totalElapsedContentDurationUs < adGroup.timeUs - 1) {
           // Period starts before the ad group, so it is a content period.
           totalElapsedContentDurationUs += period.durationUs;
         } else {
           long periodStartUs = totalElapsedContentDurationUs + elapsedAdGroupAdDurationUs;
-          if (periodStartUs + period.durationUs <= adGroup.timeUs + adGroupDurationUs) {
+          // TODO(b/192231683) Remove additional US when we can upgrade the SDK.
+          // Add one microsecond to work around rounding errors with adGroup.timeUs.
+          if (periodStartUs + period.durationUs <= adGroup.timeUs + adGroupDurationUs + 1) {
             // The period ends before the end of the ad group, so it is an ad period.
             if (j == adPeriodIndex) {
               return new Pair<>(/* adGroupIndex= */ i, adIndexInAdGroup);
@@ -511,32 +516,6 @@ import java.util.Set;
       }
     }
     throw new IllegalStateException();
-  }
-
-  /**
-   * Converts a time in seconds to the corresponding time in microseconds.
-   *
-   * <p>Fractional values are rounded to the nearest microsecond using {@link RoundingMode#HALF_UP}.
-   *
-   * @param timeSec The time in seconds.
-   * @return The corresponding time in microseconds.
-   */
-  public static long secToUsRounded(double timeSec) {
-    return DoubleMath.roundToLong(
-        BigDecimal.valueOf(timeSec).scaleByPowerOfTen(6).doubleValue(), RoundingMode.HALF_UP);
-  }
-
-  /**
-   * Converts a time in seconds to the corresponding time in milliseconds.
-   *
-   * <p>Fractional values are rounded to the nearest millisecond using {@link RoundingMode#HALF_UP}.
-   *
-   * @param timeSec The time in seconds.
-   * @return The corresponding time in milliseconds.
-   */
-  public static long secToMsRounded(double timeSec) {
-    return DoubleMath.roundToLong(
-        BigDecimal.valueOf(timeSec).scaleByPowerOfTen(3).doubleValue(), RoundingMode.HALF_UP);
   }
 
   private ImaUtil() {}

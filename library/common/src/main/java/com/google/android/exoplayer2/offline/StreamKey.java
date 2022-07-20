@@ -42,9 +42,7 @@ public final class StreamKey implements Comparable<StreamKey>, Parcelable {
   /** The stream index. */
   public final int streamIndex;
 
-  /**
-   * @deprecated Use {@link #streamIndex}.
-   */
+  /** @deprecated Use {@link #streamIndex}. */
   @Deprecated public final int trackIndex;
 
   /**

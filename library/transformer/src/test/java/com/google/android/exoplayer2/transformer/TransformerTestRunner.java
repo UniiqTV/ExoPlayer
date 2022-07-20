@@ -22,9 +22,6 @@ import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.robolectric.RobolectricUtil;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import org.checkerframework.checker.nullness.compatqual.NullableType;
 
 /** Helper class to run a {@link Transformer} test. */
 public final class TransformerTestRunner {
@@ -71,28 +68,28 @@ public final class TransformerTestRunner {
   @Nullable
   private static TransformationException runUntilListenerCalled(Transformer transformer)
       throws TimeoutException {
-    AtomicBoolean transformationCompleted = new AtomicBoolean();
-    AtomicReference<@NullableType TransformationException> transformationException =
-        new AtomicReference<>();
-
+    TransformationResult transformationResult = new TransformationResult();
     transformer.addListener(
         new Transformer.Listener() {
           @Override
-          public void onTransformationCompleted(
-              MediaItem inputMediaItem, TransformationResult transformationResult) {
-            transformationCompleted.set(true);
+          public void onTransformationCompleted(MediaItem inputMediaItem) {
+            transformationResult.isCompleted = true;
           }
 
           @Override
           public void onTransformationError(
               MediaItem inputMediaItem, TransformationException exception) {
-            transformationException.set(exception);
+            transformationResult.exception = exception;
           }
         });
     runLooperUntil(
         transformer.getApplicationLooper(),
-        () -> transformationCompleted.get() || transformationException.get() != null);
+        () -> transformationResult.isCompleted || transformationResult.exception != null);
+    return transformationResult.exception;
+  }
 
-    return transformationException.get();
+  private static class TransformationResult {
+    public boolean isCompleted;
+    @Nullable public TransformationException exception;
   }
 }

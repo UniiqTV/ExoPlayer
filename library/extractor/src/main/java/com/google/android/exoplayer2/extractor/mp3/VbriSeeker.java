@@ -89,7 +89,7 @@ import com.google.android.exoplayer2.util.Util;
         default:
           return null;
       }
-      position += segmentSize * ((long) scale);
+      position += segmentSize * scale;
     }
     if (inputLength != C.LENGTH_UNSET && inputLength != position) {
       Log.w(TAG, "VBRI data size mismatch: " + inputLength + ", " + position);

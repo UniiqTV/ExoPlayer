@@ -24,7 +24,6 @@ import android.util.AttributeSet;
 import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.decoder.VideoDecoderOutputBuffer;
 import com.google.android.exoplayer2.util.Assertions;
-import com.google.android.exoplayer2.util.GlProgram;
 import com.google.android.exoplayer2.util.GlUtil;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
@@ -48,9 +47,7 @@ public final class VideoDecoderGLSurfaceView extends GLSurfaceView
 
   private final Renderer renderer;
 
-  /**
-   * @param context A {@link Context}.
-   */
+  /** @param context A {@link Context}. */
   public VideoDecoderGLSurfaceView(Context context) {
     this(context, /* attrs= */ null);
   }
@@ -74,9 +71,7 @@ public final class VideoDecoderGLSurfaceView extends GLSurfaceView
     renderer.setOutputBuffer(outputBuffer);
   }
 
-  /**
-   * @deprecated This class implements {@link VideoDecoderOutputBufferRenderer} directly.
-   */
+  /** @deprecated This class implements {@link VideoDecoderOutputBufferRenderer} directly. */
   @Deprecated
   public VideoDecoderOutputBufferRenderer getVideoDecoderOutputBufferRenderer() {
     return this;
@@ -149,7 +144,7 @@ public final class VideoDecoderGLSurfaceView extends GLSurfaceView
     // glDrawArrays uses it.
     private final FloatBuffer[] textureCoords;
 
-    private @MonotonicNonNull GlProgram program;
+    private GlUtil.@MonotonicNonNull Program program;
     private int colorMatrixLocation;
 
     // Accessed only from the GL thread.
@@ -170,7 +165,7 @@ public final class VideoDecoderGLSurfaceView extends GLSurfaceView
 
     @Override
     public void onSurfaceCreated(GL10 unused, EGLConfig config) {
-      program = new GlProgram(VERTEX_SHADER, FRAGMENT_SHADER);
+      program = new GlUtil.Program(VERTEX_SHADER, FRAGMENT_SHADER);
       int posLocation = program.getAttributeArrayLocationAndEnable("in_pos");
       GLES20.glVertexAttribPointer(
           posLocation,
@@ -298,11 +293,19 @@ public final class VideoDecoderGLSurfaceView extends GLSurfaceView
 
     @RequiresNonNull("program")
     private void setupTextures() {
-      GLES20.glGenTextures(/* n= */ 3, yuvTextures, /* offset= */ 0);
+      GLES20.glGenTextures(3, yuvTextures, /* offset= */ 0);
       for (int i = 0; i < 3; i++) {
         GLES20.glUniform1i(program.getUniformLocation(TEXTURE_UNIFORMS[i]), i);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0 + i);
-        GlUtil.bindTexture(GLES20.GL_TEXTURE_2D, yuvTextures[i]);
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, yuvTextures[i]);
+        GLES20.glTexParameterf(
+            GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameterf(
+            GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameterf(
+            GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameterf(
+            GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
       }
       GlUtil.checkGlError();
     }

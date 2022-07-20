@@ -21,9 +21,7 @@ import com.google.android.exoplayer2.drm.DrmInitData;
 import java.util.List;
 import java.util.Map;
 
-/**
- * @deprecated Use {@link HlsMultivariantPlaylist} instead.
- */
+/** @deprecated Use {@link HlsMultivariantPlaylist} instead. */
 @Deprecated
 public final class HlsMasterPlaylist extends HlsMultivariantPlaylist {
 

@@ -854,19 +854,6 @@ public abstract class MediaCodecRenderer extends BaseRenderer {
       releaseCodec();
       return true;
     }
-    if (codecDrainAction == DRAIN_ACTION_FLUSH_AND_UPDATE_DRM_SESSION) {
-      checkState(Util.SDK_INT >= 23); // Implied by DRAIN_ACTION_FLUSH_AND_UPDATE_DRM_SESSION
-      // Needed to keep lint happy (it doesn't understand the checkState call alone)
-      if (Util.SDK_INT >= 23) {
-        try {
-          updateDrmSessionV23();
-        } catch (ExoPlaybackException e) {
-          Log.w(TAG, "Failed to update the DRM session, releasing the codec instead.", e);
-          releaseCodec();
-          return true;
-        }
-      }
-    }
     flushCodec();
     return false;
   }
@@ -2006,8 +1993,7 @@ public abstract class MediaCodecRenderer extends BaseRenderer {
    *
    * @throws ExoPlaybackException If an error occurs processing the signal.
    */
-  // codecDrainAction == DRAIN_ACTION_FLUSH_AND_UPDATE_DRM_SESSION implies SDK_INT >= 23.
-  @TargetApi(23)
+  @TargetApi(23) // codecDrainAction == DRAIN_ACTION_UPDATE_DRM_SESSION implies SDK_INT >= 23.
   private void processEndOfStream() throws ExoPlaybackException {
     switch (codecDrainAction) {
       case DRAIN_ACTION_REINITIALIZE:

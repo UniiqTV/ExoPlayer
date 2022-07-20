@@ -24,8 +24,9 @@ public interface HlsDataSourceFactory {
   /**
    * Creates a {@link DataSource} for the given data type.
    *
-   * @param dataType The {@link C.DataType} for which the {@link DataSource} will be used.
+   * @param dataType The data type for which the {@link DataSource} will be used. One of {@link C}
+   *     {@code .DATA_TYPE_*} constants.
    * @return A {@link DataSource} for the given data type.
    */
-  DataSource createDataSource(@C.DataType int dataType);
+  DataSource createDataSource(int dataType);
 }

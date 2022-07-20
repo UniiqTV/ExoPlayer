@@ -19,9 +19,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 
 import android.net.Uri;
-import android.os.Bundle;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-import com.google.android.exoplayer2.MediaItem.RequestMetadata;
 import com.google.android.exoplayer2.offline.StreamKey;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.common.collect.ImmutableList;
@@ -227,7 +225,7 @@ public class MediaItemTest {
         new MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
             .setLicenseUri(licenseUri)
             .setForcedSessionTrackTypes(ImmutableList.of(C.TRACK_TYPE_AUDIO))
-            .setForceSessionsForAudioAndVideoTracks(true)
+            .forceSessionsForAudioAndVideoTracks(true)
             .build();
 
     assertThat(drmConfiguration.sessionForClearTypes)
@@ -584,24 +582,6 @@ public class MediaItemTest {
   }
 
   @Test
-  public void builder_setRequestMetadata_setsRequestMetadata() {
-    Bundle extras = new Bundle();
-    extras.putString("key", "value");
-    RequestMetadata requestMetadata =
-        new RequestMetadata.Builder()
-            .setMediaUri(Uri.parse("http://test.test"))
-            .setSearchQuery("Play media!")
-            .setExtras(extras)
-            .build();
-
-    MediaItem mediaItem =
-        new MediaItem.Builder().setMediaId("mediaID").setRequestMetadata(requestMetadata).build();
-
-    assertThat(mediaItem.requestMetadata).isEqualTo(requestMetadata);
-    assertThat(mediaItem.requestMetadata.extras.getString("key")).isEqualTo("value");
-  }
-
-  @Test
   @SuppressWarnings("deprecation") // Testing deprecated setter methods
   public void buildUpon_individualSetters_equalsToOriginal() {
     MediaItem mediaItem =
@@ -699,11 +679,6 @@ public class MediaItemTest {
                         .setLabel("label")
                         .setId("id")
                         .build()))
-            .setRequestMetadata(
-                new RequestMetadata.Builder()
-                    .setMediaUri(Uri.parse("http://test.test"))
-                    .setSearchQuery("search")
-                    .build())
             .setTag(new Object())
             .build();
 
@@ -731,11 +706,6 @@ public class MediaItemTest {
             .setClipRelativeToDefaultPosition(true)
             .setClipRelativeToLiveWindow(true)
             .setClipStartsAtKeyFrame(true)
-            .setRequestMetadata(
-                new RequestMetadata.Builder()
-                    .setMediaUri(Uri.parse("http://test.test"))
-                    .setSearchQuery("search")
-                    .build())
             .build();
 
     assertThat(mediaItem.localConfiguration).isNull();

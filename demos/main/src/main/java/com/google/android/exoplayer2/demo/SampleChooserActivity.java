@@ -15,9 +15,9 @@
  */
 package com.google.android.exoplayer2.demo;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
+import static com.google.android.exoplayer2.util.Assertions.checkArgument;
+import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
+import static com.google.android.exoplayer2.util.Assertions.checkState;
 
 import android.content.Context;
 import android.content.Intent;
@@ -27,7 +27,6 @@ import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.JsonReader;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -54,7 +53,6 @@ import com.google.android.exoplayer2.upstream.DataSourceUtil;
 import com.google.android.exoplayer2.upstream.DataSpec;
 import com.google.android.exoplayer2.util.Log;
 import com.google.android.exoplayer2.util.Util;
-import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import java.io.IOException;
@@ -118,11 +116,8 @@ public class SampleChooserActivity extends AppCompatActivity
     useExtensionRenderers = DemoUtil.useExtensionRenderers();
     downloadTracker = DemoUtil.getDownloadTracker(/* context= */ this);
     loadSample();
-    startDownloadService();
-  }
 
-  /** Start the download service if it should be running but it's not currently. */
-  private void startDownloadService() {
+    // Start the download service if it should be running but it's not currently.
     // Starting the service in the foreground causes notification flicker if there is no scheduled
     // action. Starting it in the background throws an exception if the app is in the background too
     // (e.g. if device screen is locked).
@@ -441,10 +436,7 @@ public class SampleChooserActivity extends AppCompatActivity
       } else {
         @Nullable
         String adaptiveMimeType =
-            Util.getAdaptiveMimeTypeForContentType(
-                TextUtils.isEmpty(extension)
-                    ? Util.inferContentType(uri)
-                    : Util.inferContentTypeForExtension(extension));
+            Util.getAdaptiveMimeTypeForContentType(Util.inferContentType(uri, extension));
         mediaItem
             .setUri(uri)
             .setMediaMetadata(new MediaMetadata.Builder().setTitle(title).build())
@@ -455,7 +447,7 @@ public class SampleChooserActivity extends AppCompatActivity
               new MediaItem.DrmConfiguration.Builder(drmUuid)
                   .setLicenseUri(drmLicenseUri)
                   .setLicenseRequestHeaders(drmLicenseRequestHeaders)
-                  .setForceSessionsForAudioAndVideoTracks(drmSessionForClearContent)
+                  .forceSessionsForAudioAndVideoTracks(drmSessionForClearContent)
                   .setMultiSession(drmMultiSession)
                   .setForceDefaultLicenseUri(drmForceDefaultLicenseUri)
                   .build());
@@ -489,7 +481,7 @@ public class SampleChooserActivity extends AppCompatActivity
 
     private PlaylistGroup getGroup(String groupName, List<PlaylistGroup> groups) {
       for (int i = 0; i < groups.size(); i++) {
-        if (Objects.equal(groupName, groups.get(i).title)) {
+        if (Util.areEqual(groupName, groups.get(i).title)) {
           return groups.get(i);
         }
       }

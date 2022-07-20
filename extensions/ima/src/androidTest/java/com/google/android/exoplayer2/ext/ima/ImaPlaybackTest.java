@@ -42,7 +42,9 @@ import com.google.android.exoplayer2.testutil.ExoHostedTest;
 import com.google.android.exoplayer2.testutil.HostActivity;
 import com.google.android.exoplayer2.testutil.TestUtil;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector;
+import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DataSpec;
+import com.google.android.exoplayer2.upstream.DefaultDataSource;
 import com.google.android.exoplayer2.util.Assertions;
 import com.google.android.exoplayer2.util.Util;
 import java.util.ArrayList;
@@ -233,13 +235,14 @@ public final class ImaPlaybackTest {
     protected MediaSource buildSource(
         HostActivity host, DrmSessionManager drmSessionManager, FrameLayout overlayFrameLayout) {
       Context context = host.getApplicationContext();
+      DataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(context);
       MediaSource contentMediaSource =
           new DefaultMediaSourceFactory(context).createMediaSource(MediaItem.fromUri(contentUri));
       return new AdsMediaSource(
           contentMediaSource,
           adTagDataSpec,
           /* adsId= */ adTagDataSpec.uri,
-          new DefaultMediaSourceFactory(context),
+          new DefaultMediaSourceFactory(dataSourceFactory),
           Assertions.checkNotNull(imaAdsLoader),
           () -> overlayFrameLayout);
     }

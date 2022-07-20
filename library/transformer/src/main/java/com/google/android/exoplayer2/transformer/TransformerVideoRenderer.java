@@ -25,7 +25,6 @@ import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.FormatHolder;
 import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
 import com.google.android.exoplayer2.source.SampleStream.ReadDataResult;
-import com.google.common.collect.ImmutableList;
 import java.nio.ByteBuffer;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.RequiresNonNull;
@@ -35,11 +34,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
   private static final String TAG = "TVideoRenderer";
 
   private final Context context;
-  private final boolean clippingStartsAtKeyFrame;
-  private final ImmutableList<GlEffect> effects;
   private final Codec.EncoderFactory encoderFactory;
   private final Codec.DecoderFactory decoderFactory;
-  private final FrameProcessorChain.Listener frameProcessorChainListener;
   private final Transformer.DebugViewProvider debugViewProvider;
   private final DecoderInputBuffer decoderInputBuffer;
 
@@ -50,20 +46,14 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
       MuxerWrapper muxerWrapper,
       TransformerMediaClock mediaClock,
       TransformationRequest transformationRequest,
-      boolean clippingStartsAtKeyFrame,
-      ImmutableList<GlEffect> effects,
       Codec.EncoderFactory encoderFactory,
       Codec.DecoderFactory decoderFactory,
       FallbackListener fallbackListener,
-      FrameProcessorChain.Listener frameProcessorChainListener,
       Transformer.DebugViewProvider debugViewProvider) {
     super(C.TRACK_TYPE_VIDEO, muxerWrapper, mediaClock, transformationRequest, fallbackListener);
     this.context = context;
-    this.clippingStartsAtKeyFrame = clippingStartsAtKeyFrame;
-    this.effects = effects;
     this.encoderFactory = encoderFactory;
     this.decoderFactory = decoderFactory;
-    this.frameProcessorChainListener = frameProcessorChainListener;
     this.debugViewProvider = debugViewProvider;
     decoderInputBuffer =
         new DecoderInputBuffer(DecoderInputBuffer.BUFFER_REPLACEMENT_MODE_DISABLED);
@@ -95,14 +85,11 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
           new VideoTranscodingSamplePipeline(
               context,
               inputFormat,
-              streamOffsetUs,
               transformationRequest,
-              effects,
               decoderFactory,
               encoderFactory,
               muxerWrapper.getSupportedSampleMimeTypes(getTrackType()),
               fallbackListener,
-              frameProcessorChainListener,
               debugViewProvider);
     }
     if (transformationRequest.flattenForSlowMotion) {
@@ -112,15 +99,6 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
   }
 
   private boolean shouldPassthrough(Format inputFormat) {
-    if ((streamStartPositionUs - streamOffsetUs) != 0 && !clippingStartsAtKeyFrame) {
-      return false;
-    }
-    if (encoderFactory.videoNeedsEncoding()) {
-      return false;
-    }
-    if (transformationRequest.enableRequestSdrToneMapping) {
-      return false;
-    }
     if (transformationRequest.enableHdrEditing) {
       return false;
     }
@@ -132,23 +110,11 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
         && !muxerWrapper.supportsSampleMimeType(inputFormat.sampleMimeType)) {
       return false;
     }
-    if (inputFormat.pixelWidthHeightRatio != 1f) {
-      return false;
-    }
-    if (transformationRequest.rotationDegrees != 0f) {
-      return false;
-    }
-    if (transformationRequest.scaleX != 1f) {
-      return false;
-    }
-    if (transformationRequest.scaleY != 1f) {
-      return false;
-    }
     if (transformationRequest.outputHeight != C.LENGTH_UNSET
         && transformationRequest.outputHeight != inputFormat.height) {
       return false;
     }
-    if (!effects.isEmpty()) {
+    if (!transformationRequest.transformationMatrix.isIdentity()) {
       return false;
     }
     return true;
@@ -165,16 +131,9 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
   @RequiresNonNull({"samplePipeline", "#1.data"})
   protected void maybeQueueSampleToPipeline(DecoderInputBuffer inputBuffer)
       throws TransformationException {
-    if (sefSlowMotionFlattener == null) {
-      samplePipeline.queueInputBuffer();
-      return;
-    }
-
     ByteBuffer data = inputBuffer.data;
-    long presentationTimeUs = inputBuffer.timeUs - streamOffsetUs;
     boolean shouldDropSample =
-        sefSlowMotionFlattener.dropOrTransformSample(data, presentationTimeUs);
-    inputBuffer.timeUs = streamOffsetUs + sefSlowMotionFlattener.getSamplePresentationTimeUs();
+        sefSlowMotionFlattener != null && sefSlowMotionFlattener.dropOrTransformSample(inputBuffer);
     if (shouldDropSample) {
       data.clear();
     } else {

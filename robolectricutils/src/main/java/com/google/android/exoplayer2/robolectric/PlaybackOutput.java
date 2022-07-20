@@ -35,7 +35,6 @@ import com.google.android.exoplayer2.metadata.vorbis.VorbisComment;
 import com.google.android.exoplayer2.testutil.CapturingRenderersFactory;
 import com.google.android.exoplayer2.testutil.Dumper;
 import com.google.android.exoplayer2.text.Cue;
-import com.google.android.exoplayer2.text.CueGroup;
 import com.google.android.exoplayer2.util.Util;
 import com.google.common.collect.ImmutableList;
 import java.nio.ByteBuffer;
@@ -55,14 +54,12 @@ public final class PlaybackOutput implements Dumper.Dumpable {
 
   private final List<Metadata> metadatas;
   private final List<List<Cue>> subtitles;
-  private final List<List<Cue>> subtitlesFromDeprecatedTextOutput;
 
   private PlaybackOutput(ExoPlayer player, CapturingRenderersFactory capturingRenderersFactory) {
     this.capturingRenderersFactory = capturingRenderersFactory;
 
     metadatas = Collections.synchronizedList(new ArrayList<>());
     subtitles = Collections.synchronizedList(new ArrayList<>());
-    subtitlesFromDeprecatedTextOutput = Collections.synchronizedList(new ArrayList<>());
     // TODO: Consider passing playback position into MetadataOutput and TextOutput. Calling
     // player.getCurrentPosition() inside onMetadata/Cues will likely be non-deterministic
     // because renderer-thread != playback-thread.
@@ -75,12 +72,7 @@ public final class PlaybackOutput implements Dumper.Dumpable {
 
           @Override
           public void onCues(List<Cue> cues) {
-            subtitlesFromDeprecatedTextOutput.add(cues);
-          }
-
-          @Override
-          public void onCues(CueGroup cueGroup) {
-            subtitles.add(cueGroup.cues);
+            subtitles.add(cues);
           }
         });
   }
@@ -152,11 +144,6 @@ public final class PlaybackOutput implements Dumper.Dumpable {
   }
 
   private void dumpSubtitles(Dumper dumper) {
-    if (!subtitles.equals(subtitlesFromDeprecatedTextOutput)) {
-      throw new IllegalStateException(
-          "Expected subtitles to be equal from both implementations of onCues method.");
-    }
-
     if (subtitles.isEmpty()) {
       return;
     }

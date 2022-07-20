@@ -27,9 +27,7 @@ public final class RendererConfiguration {
   /** Whether to enable tunneling. */
   public final boolean tunneling;
 
-  /**
-   * @param tunneling Whether to enable tunneling.
-   */
+  /** @param tunneling Whether to enable tunneling. */
   public RendererConfiguration(boolean tunneling) {
     this.tunneling = tunneling;
   }

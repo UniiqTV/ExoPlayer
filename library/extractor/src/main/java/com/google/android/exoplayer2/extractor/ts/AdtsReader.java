@@ -98,9 +98,7 @@ public final class AdtsReader implements ElementaryStreamReader {
   private @MonotonicNonNull TrackOutput currentOutput;
   private long currentSampleDuration;
 
-  /**
-   * @param exposeId3 True if the reader should expose ID3 information.
-   */
+  /** @param exposeId3 True if the reader should expose ID3 information. */
   public AdtsReader(boolean exposeId3) {
     this(exposeId3, null);
   }

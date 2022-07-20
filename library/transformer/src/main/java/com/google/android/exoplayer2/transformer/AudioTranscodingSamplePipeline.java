@@ -20,16 +20,17 @@ import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
 import static com.google.android.exoplayer2.util.Assertions.checkState;
 import static java.lang.Math.min;
 
+import android.media.MediaCodec.BufferInfo;
 import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.audio.AudioProcessor;
 import com.google.android.exoplayer2.audio.AudioProcessor.AudioFormat;
+import com.google.android.exoplayer2.audio.SonicAudioProcessor;
 import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
 import com.google.android.exoplayer2.util.Util;
 import java.nio.ByteBuffer;
 import java.util.List;
-import org.checkerframework.checker.nullness.qual.RequiresNonNull;
 import org.checkerframework.dataflow.qual.Pure;
 
 /**
@@ -42,21 +43,24 @@ import org.checkerframework.dataflow.qual.Pure;
   private final Codec decoder;
   private final DecoderInputBuffer decoderInputBuffer;
 
-  @Nullable private final SpeedChangingAudioProcessor speedChangingAudioProcessor;
+  private final SonicAudioProcessor sonicAudioProcessor;
+  private final SpeedProvider speedProvider;
+  private final boolean flattenForSlowMotion;
 
   private final Codec encoder;
   private final AudioFormat encoderInputAudioFormat;
   private final DecoderInputBuffer encoderInputBuffer;
   private final DecoderInputBuffer encoderOutputBuffer;
 
-  private ByteBuffer processorOutputBuffer;
-
   private long nextEncoderInputBufferTimeUs;
   private long encoderBufferDurationRemainder;
 
+  private ByteBuffer sonicOutputBuffer;
+  private boolean drainingSonicForSpeedChange;
+  private float currentSpeed;
+
   public AudioTranscodingSamplePipeline(
       Format inputFormat,
-      long streamOffsetUs,
       TransformationRequest transformationRequest,
       Codec.DecoderFactory decoderFactory,
       Codec.EncoderFactory encoderFactory,
@@ -70,8 +74,13 @@ import org.checkerframework.dataflow.qual.Pure;
     encoderOutputBuffer =
         new DecoderInputBuffer(DecoderInputBuffer.BUFFER_REPLACEMENT_MODE_DISABLED);
 
-    decoder = decoderFactory.createForAudioDecoding(inputFormat);
+    this.decoder = decoderFactory.createForAudioDecoding(inputFormat);
 
+    this.flattenForSlowMotion = transformationRequest.flattenForSlowMotion;
+    sonicAudioProcessor = new SonicAudioProcessor();
+    sonicOutputBuffer = AudioProcessor.EMPTY_BUFFER;
+    speedProvider = new SegmentSpeedProvider(inputFormat);
+    currentSpeed = speedProvider.getSpeed(0);
     AudioFormat encoderInputAudioFormat =
         new AudioFormat(
             inputFormat.sampleRate,
@@ -79,21 +88,18 @@ import org.checkerframework.dataflow.qual.Pure;
             // The decoder uses ENCODING_PCM_16BIT by default.
             // https://developer.android.com/reference/android/media/MediaCodec#raw-audio-buffers
             C.ENCODING_PCM_16BIT);
-    if (transformationRequest.flattenForSlowMotion) {
-      speedChangingAudioProcessor =
-          new SpeedChangingAudioProcessor(new SegmentSpeedProvider(inputFormat));
+    if (flattenForSlowMotion) {
       try {
-        encoderInputAudioFormat = speedChangingAudioProcessor.configure(encoderInputAudioFormat);
+        encoderInputAudioFormat = sonicAudioProcessor.configure(encoderInputAudioFormat);
       } catch (AudioProcessor.UnhandledAudioFormatException impossible) {
         throw new IllegalStateException(impossible);
       }
-      speedChangingAudioProcessor.flush();
-    } else {
-      speedChangingAudioProcessor = null;
+      sonicAudioProcessor.setSpeed(currentSpeed);
+      sonicAudioProcessor.setPitch(currentSpeed);
+      sonicAudioProcessor.flush();
     }
-    processorOutputBuffer = AudioProcessor.EMPTY_BUFFER;
-
     this.encoderInputAudioFormat = encoderInputAudioFormat;
+
     Format requestedOutputFormat =
         new Format.Builder()
             .setSampleMimeType(
@@ -109,9 +115,6 @@ import org.checkerframework.dataflow.qual.Pure;
     fallbackListener.onTransformationRequestFinalized(
         createFallbackTransformationRequest(
             transformationRequest, requestedOutputFormat, encoder.getConfigurationFormat()));
-
-    // Use the same stream offset as the input stream for encoder input buffers.
-    nextEncoderInputBufferTimeUs = streamOffsetUs;
   }
 
   @Override
@@ -127,8 +130,8 @@ import org.checkerframework.dataflow.qual.Pure;
 
   @Override
   public boolean processData() throws TransformationException {
-    if (speedChangingAudioProcessor != null) {
-      return feedEncoderFromProcessor() || feedProcessorFromDecoder();
+    if (sonicAudioProcessor.isActive()) {
+      return feedEncoderFromSonic() || feedSonicFromDecoder();
     } else {
       return feedEncoderFromDecoder();
     }
@@ -154,7 +157,7 @@ import org.checkerframework.dataflow.qual.Pure;
 
   @Override
   public void releaseOutputBuffer() throws TransformationException {
-    encoder.releaseOutputBuffer(/* render= */ false);
+    encoder.releaseOutputBuffer();
   }
 
   @Override
@@ -164,9 +167,7 @@ import org.checkerframework.dataflow.qual.Pure;
 
   @Override
   public void release() {
-    if (speedChangingAudioProcessor != null) {
-      speedChangingAudioProcessor.reset();
-    }
+    sonicAudioProcessor.reset();
     decoder.release();
     encoder.release();
   }
@@ -189,10 +190,13 @@ import org.checkerframework.dataflow.qual.Pure;
     if (decoderOutputBuffer == null) {
       return false;
     }
-
+    if (isSpeedChanging(checkNotNull(decoder.getOutputBufferInfo()))) {
+      flushSonicAndSetSpeed(currentSpeed);
+      return false;
+    }
     feedEncoder(decoderOutputBuffer);
     if (!decoderOutputBuffer.hasRemaining()) {
-      decoder.releaseOutputBuffer(/* render= */ false);
+      decoder.releaseOutputBuffer();
     }
     return true;
   }
@@ -201,23 +205,22 @@ import org.checkerframework.dataflow.qual.Pure;
    * Attempts to pass audio processor output data to the encoder, and returns whether it may be
    * possible to pass more data immediately by calling this method again.
    */
-  @RequiresNonNull("speedChangingAudioProcessor")
-  private boolean feedEncoderFromProcessor() throws TransformationException {
+  private boolean feedEncoderFromSonic() throws TransformationException {
     if (!encoder.maybeDequeueInputBuffer(encoderInputBuffer)) {
       return false;
     }
 
-    if (!processorOutputBuffer.hasRemaining()) {
-      processorOutputBuffer = speedChangingAudioProcessor.getOutput();
-      if (!processorOutputBuffer.hasRemaining()) {
-        if (decoder.isEnded() && speedChangingAudioProcessor.isEnded()) {
+    if (!sonicOutputBuffer.hasRemaining()) {
+      sonicOutputBuffer = sonicAudioProcessor.getOutput();
+      if (!sonicOutputBuffer.hasRemaining()) {
+        if (decoder.isEnded() && sonicAudioProcessor.isEnded()) {
           queueEndOfStreamToEncoder();
         }
         return false;
       }
     }
 
-    feedEncoder(processorOutputBuffer);
+    feedEncoder(sonicOutputBuffer);
     return true;
   }
 
@@ -225,29 +228,39 @@ import org.checkerframework.dataflow.qual.Pure;
    * Attempts to process decoder output data, and returns whether it may be possible to process more
    * data immediately by calling this method again.
    */
-  @RequiresNonNull("speedChangingAudioProcessor")
-  private boolean feedProcessorFromDecoder() throws TransformationException {
-    // Audio processors invalidate any previous output buffer when more input is queued, so we don't
-    // queue if there is output still to be processed.
-    if (processorOutputBuffer.hasRemaining()
-        || speedChangingAudioProcessor.getOutput().hasRemaining()) {
+  private boolean feedSonicFromDecoder() throws TransformationException {
+    if (drainingSonicForSpeedChange) {
+      if (sonicAudioProcessor.isEnded() && !sonicOutputBuffer.hasRemaining()) {
+        flushSonicAndSetSpeed(currentSpeed);
+        drainingSonicForSpeedChange = false;
+      }
+      return false;
+    }
+
+    // Sonic invalidates any previous output buffer when more input is queued, so we don't queue if
+    // there is output still to be processed.
+    if (sonicOutputBuffer.hasRemaining()) {
       return false;
     }
 
     if (decoder.isEnded()) {
-      speedChangingAudioProcessor.queueEndOfStream();
+      sonicAudioProcessor.queueEndOfStream();
       return false;
     }
-    checkState(!speedChangingAudioProcessor.isEnded());
+    checkState(!sonicAudioProcessor.isEnded());
 
     @Nullable ByteBuffer decoderOutputBuffer = decoder.getOutputBuffer();
     if (decoderOutputBuffer == null) {
       return false;
     }
-
-    speedChangingAudioProcessor.queueInput(decoderOutputBuffer);
+    if (isSpeedChanging(checkNotNull(decoder.getOutputBufferInfo()))) {
+      sonicAudioProcessor.queueEndOfStream();
+      drainingSonicForSpeedChange = true;
+      return false;
+    }
+    sonicAudioProcessor.queueInput(decoderOutputBuffer);
     if (!decoderOutputBuffer.hasRemaining()) {
-      decoder.releaseOutputBuffer(/* render= */ false);
+      decoder.releaseOutputBuffer();
     }
     return true;
   }
@@ -279,6 +292,22 @@ import org.checkerframework.dataflow.qual.Pure;
     encoderInputBuffer.flip();
     // Queuing EOS should only occur with an empty buffer.
     encoder.queueInputBuffer(encoderInputBuffer);
+  }
+
+  private boolean isSpeedChanging(BufferInfo bufferInfo) {
+    if (!flattenForSlowMotion) {
+      return false;
+    }
+    float newSpeed = speedProvider.getSpeed(bufferInfo.presentationTimeUs);
+    boolean speedChanging = newSpeed != currentSpeed;
+    currentSpeed = newSpeed;
+    return speedChanging;
+  }
+
+  private void flushSonicAndSetSpeed(float speed) {
+    sonicAudioProcessor.setSpeed(speed);
+    sonicAudioProcessor.setPitch(speed);
+    sonicAudioProcessor.flush();
   }
 
   private void computeNextEncoderInputBufferTimeUs(

@@ -18,7 +18,6 @@ package com.google.android.exoplayer2.transformer;
 import static java.lang.annotation.ElementType.TYPE_USE;
 
 import android.media.MediaCodec;
-import android.media.MediaFormat;
 import android.os.SystemClock;
 import androidx.annotation.IntDef;
 import androidx.annotation.Nullable;
@@ -145,7 +144,7 @@ public final class TransformationException extends Exception {
   /**
    * Caused by the output format for a track not being supported.
    *
-   * <p>Supported output formats are limited by the muxer's capabilities and the {@linkplain
+   * <p>Supported output formats are limited by the muxer's capabilities and the {@link
    * Codec.DecoderFactory encoders} available.
    */
   public static final int ERROR_CODE_OUTPUT_FORMAT_UNSUPPORTED = 4003;
@@ -205,55 +204,27 @@ public final class TransformationException extends Exception {
   /**
    * Creates an instance for a decoder or encoder related exception.
    *
-   * <p>Use this method after the {@link MediaFormat} used to configure the {@link Codec} is known.
-   *
    * @param cause The cause of the failure.
-   * @param isVideo Whether the decoder or encoder is configured for video.
-   * @param isDecoder Whether the exception is created for a decoder.
-   * @param mediaFormat The {@link MediaFormat} used for configuring the underlying {@link
-   *     MediaCodec}.
+   * @param componentName The name of the component used, e.g. 'VideoEncoder'.
+   * @param configurationFormat The {@link Format} used for configuring the decoder/encoder.
    * @param mediaCodecName The name of the {@link MediaCodec} used, if known.
    * @param errorCode See {@link #errorCode}.
    * @return The created instance.
    */
   public static TransformationException createForCodec(
       Throwable cause,
-      boolean isVideo,
-      boolean isDecoder,
-      MediaFormat mediaFormat,
+      String componentName,
+      Format configurationFormat,
       @Nullable String mediaCodecName,
       int errorCode) {
-    String componentName = (isVideo ? "Video" : "Audio") + (isDecoder ? "Decoder" : "Encoder");
-    String errorMessage =
-        componentName + ", mediaFormat=" + mediaFormat + ", mediaCodecName=" + mediaCodecName;
-    return new TransformationException(errorMessage, cause, errorCode);
-  }
-
-  /**
-   * Creates an instance for a decoder or encoder related exception.
-   *
-   * <p>Use this method before configuring the {@link Codec}, or when the {@link Codec} is not
-   * configured with a {@link MediaFormat}.
-   *
-   * @param cause The cause of the failure.
-   * @param isVideo Whether the decoder or encoder is configured for video.
-   * @param isDecoder Whether the exception is created for a decoder.
-   * @param format The {@link Format} used for configuring the {@link Codec}.
-   * @param mediaCodecName The name of the {@link MediaCodec} used, if known.
-   * @param errorCode See {@link #errorCode}.
-   * @return The created instance.
-   */
-  public static TransformationException createForCodec(
-      Throwable cause,
-      boolean isVideo,
-      boolean isDecoder,
-      Format format,
-      @Nullable String mediaCodecName,
-      int errorCode) {
-    String componentName = (isVideo ? "Video" : "Audio") + (isDecoder ? "Decoder" : "Encoder");
-    String errorMessage =
-        componentName + " error, format=" + format + ", mediaCodecName=" + mediaCodecName;
-    return new TransformationException(errorMessage, cause, errorCode);
+    return new TransformationException(
+        componentName
+            + " error, format = "
+            + configurationFormat
+            + ", mediaCodecName="
+            + mediaCodecName,
+        cause,
+        errorCode);
   }
 
   /**
@@ -272,15 +243,15 @@ public final class TransformationException extends Exception {
   }
 
   /**
-   * Creates an instance for a {@link FrameProcessorChain} related exception.
+   * Creates an instance for a {@link FrameEditor} related exception.
    *
    * @param cause The cause of the failure.
    * @param errorCode See {@link #errorCode}.
    * @return The created instance.
    */
-  /* package */ static TransformationException createForFrameProcessorChain(
+  /* package */ static TransformationException createForFrameEditor(
       Throwable cause, int errorCode) {
-    return new TransformationException("FrameProcessorChain error", cause, errorCode);
+    return new TransformationException("FrameEditor error", cause, errorCode);
   }
 
   /**

@@ -126,7 +126,7 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
   private boolean codecHandlesHdr10PlusOutOfBandMetadata;
 
   @Nullable private Surface surface;
-  @Nullable private PlaceholderSurface placeholderSurface;
+  @Nullable private DummySurface dummySurface;
   private boolean haveReportedFirstFrameRenderedForCurrentSurface;
   private @C.VideoScalingMode int scalingMode;
   private boolean renderedFirstFrameAfterReset;
@@ -512,7 +512,7 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
   public boolean isReady() {
     if (super.isReady()
         && (renderedFirstFrameAfterReset
-            || (placeholderSurface != null && surface == placeholderSurface)
+            || (dummySurface != null && surface == dummySurface)
             || getCodec() == null
             || tunneling)) {
       // Ready. If we were joining then we've now joined, so clear the joining deadline.
@@ -564,14 +564,14 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
     }
   }
 
-  @TargetApi(17) // Needed for placeholderSurface usage, as it is always null on API level 16.
+  @TargetApi(17) // Needed for dummySurface usage. dummySurface is always null on API level 16.
   @Override
   protected void onReset() {
     try {
       super.onReset();
     } finally {
-      if (placeholderSurface != null) {
-        releasePlaceholderSurface();
+      if (dummySurface != null) {
+        releaseDummySurface();
       }
     }
   }
@@ -621,14 +621,14 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
     @Nullable Surface surface = output instanceof Surface ? (Surface) output : null;
 
     if (surface == null) {
-      // Use a placeholder surface if possible.
-      if (placeholderSurface != null) {
-        surface = placeholderSurface;
+      // Use a dummy surface if possible.
+      if (dummySurface != null) {
+        surface = dummySurface;
       } else {
         MediaCodecInfo codecInfo = getCodecInfo();
         if (codecInfo != null && shouldUseDummySurface(codecInfo)) {
-          placeholderSurface = PlaceholderSurface.newInstanceV17(context, codecInfo.secure);
-          surface = placeholderSurface;
+          dummySurface = DummySurface.newInstanceV17(context, codecInfo.secure);
+          surface = dummySurface;
         }
       }
     }
@@ -649,7 +649,7 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
           maybeInitCodecOrBypass();
         }
       }
-      if (surface != null && surface != placeholderSurface) {
+      if (surface != null && surface != dummySurface) {
         // If we know the video size, report it again immediately.
         maybeRenotifyVideoSizeChanged();
         // We haven't rendered to the new surface yet.
@@ -662,7 +662,7 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
         clearReportedVideoSize();
         clearRenderedFirstFrame();
       }
-    } else if (surface != null && surface != placeholderSurface) {
+    } else if (surface != null && surface != dummySurface) {
       // The surface is set and unchanged. If we know the video size and/or have already rendered to
       // the surface, report these again immediately.
       maybeRenotifyVideoSizeChanged();
@@ -681,16 +681,16 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
     return tunneling && Util.SDK_INT < 23;
   }
 
-  @TargetApi(17) // Needed for placeHolderSurface usage, as it is always null on API level 16.
+  @TargetApi(17) // Needed for dummySurface usage. dummySurface is always null on API level 16.
   @Override
   protected MediaCodecAdapter.Configuration getMediaCodecConfiguration(
       MediaCodecInfo codecInfo,
       Format format,
       @Nullable MediaCrypto crypto,
       float codecOperatingRate) {
-    if (placeholderSurface != null && placeholderSurface.secure != codecInfo.secure) {
+    if (dummySurface != null && dummySurface.secure != codecInfo.secure) {
       // We can't re-use the current DummySurface instance with the new decoder.
-      releasePlaceholderSurface();
+      releaseDummySurface();
     }
     String codecMimeType = codecInfo.codecMimeType;
     codecMaxValues = getCodecMaxValues(codecInfo, format, getStreamFormats());
@@ -706,10 +706,10 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
       if (!shouldUseDummySurface(codecInfo)) {
         throw new IllegalStateException();
       }
-      if (placeholderSurface == null) {
-        placeholderSurface = PlaceholderSurface.newInstanceV17(context, codecInfo.secure);
+      if (dummySurface == null) {
+        dummySurface = DummySurface.newInstanceV17(context, codecInfo.secure);
       }
-      surface = placeholderSurface;
+      surface = dummySurface;
     }
     return MediaCodecAdapter.Configuration.createForVideoDecoding(
         codecInfo, mediaFormat, format, surface, crypto);
@@ -748,84 +748,6 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
       throws ExoPlaybackException {
     super.setPlaybackSpeed(currentPlaybackSpeed, targetPlaybackSpeed);
     frameReleaseHelper.onPlaybackSpeed(currentPlaybackSpeed);
-  }
-
-  /**
-   * Returns a maximum input size for a given codec and format.
-   *
-   * @param codecInfo Information about the {@link MediaCodec} being configured.
-   * @param format The format.
-   * @return A maximum input size in bytes, or {@link Format#NO_VALUE} if a maximum could not be
-   *     determined.
-   */
-  public static int getCodecMaxInputSize(MediaCodecInfo codecInfo, Format format) {
-    int width = format.width;
-    int height = format.height;
-    if (width == Format.NO_VALUE || height == Format.NO_VALUE) {
-      // We can't infer a maximum input size without video dimensions.
-      return Format.NO_VALUE;
-    }
-
-    String sampleMimeType = format.sampleMimeType;
-    if (MimeTypes.VIDEO_DOLBY_VISION.equals(sampleMimeType)) {
-      // Dolby vision can be a wrapper around H264 or H265. We assume it's wrapping H265 by default
-      // because it's the common case, and because some devices may fail to allocate the codec when
-      // the larger buffer size required for H264 is requested. We size buffers for H264 only if the
-      // format contains sufficient information for us to determine unambiguously that it's a H264
-      // profile.
-      sampleMimeType = MimeTypes.VIDEO_H265;
-      @Nullable
-      Pair<Integer, Integer> codecProfileAndLevel = MediaCodecUtil.getCodecProfileAndLevel(format);
-      if (codecProfileAndLevel != null) {
-        int profile = codecProfileAndLevel.first;
-        if (profile == CodecProfileLevel.DolbyVisionProfileDvavSe
-            || profile == CodecProfileLevel.DolbyVisionProfileDvavPer
-            || profile == CodecProfileLevel.DolbyVisionProfileDvavPen) {
-          sampleMimeType = MimeTypes.VIDEO_H264;
-        }
-      }
-    }
-
-    // Attempt to infer a maximum input size from the format.
-    int maxPixels;
-    int minCompressionRatio;
-    switch (sampleMimeType) {
-      case MimeTypes.VIDEO_H263:
-      case MimeTypes.VIDEO_MP4V:
-        maxPixels = width * height;
-        minCompressionRatio = 2;
-        break;
-      case MimeTypes.VIDEO_H264:
-        if ("BRAVIA 4K 2015".equals(Util.MODEL) // Sony Bravia 4K
-            || ("Amazon".equals(Util.MANUFACTURER)
-                && ("KFSOWI".equals(Util.MODEL) // Kindle Soho
-                    || ("AFTS".equals(Util.MODEL) && codecInfo.secure)))) { // Fire TV Gen 2
-          // Use the default value for cases where platform limitations may prevent buffers of the
-          // calculated maximum input size from being allocated.
-          return Format.NO_VALUE;
-        }
-        // Round up width/height to an integer number of macroblocks.
-        maxPixels = Util.ceilDivide(width, 16) * Util.ceilDivide(height, 16) * 16 * 16;
-        minCompressionRatio = 2;
-        break;
-      case MimeTypes.VIDEO_AV1:
-        // AV1 does not specify a ratio so use the values from the platform's C2SoftAomDec.cpp.
-      case MimeTypes.VIDEO_VP8:
-        // VPX does not specify a ratio so use the values from the platform's SoftVPX.cpp.
-        maxPixels = width * height;
-        minCompressionRatio = 2;
-        break;
-      case MimeTypes.VIDEO_H265:
-      case MimeTypes.VIDEO_VP9:
-        maxPixels = width * height;
-        minCompressionRatio = 4;
-        break;
-      default:
-        // Leave the default max input size.
-        return Format.NO_VALUE;
-    }
-    // Estimate the maximum input size assuming three channel 4:2:0 subsampled input frames.
-    return (maxPixels * 3) / (2 * minCompressionRatio);
   }
 
   @Override
@@ -1024,7 +946,7 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
       earlyUs -= elapsedRealtimeNowUs - elapsedRealtimeUs;
     }
 
-    if (surface == placeholderSurface) {
+    if (surface == dummySurface) {
       // Skip frames in sync with playback, so we'll be at the right frame if the mode changes.
       if (isBufferLate(earlyUs)) {
         skipOutputBuffer(codec, bufferIndex, presentationTimeUs);
@@ -1334,16 +1256,16 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
     return Util.SDK_INT >= 23
         && !tunneling
         && !codecNeedsSetOutputSurfaceWorkaround(codecInfo.name)
-        && (!codecInfo.secure || PlaceholderSurface.isSecureSupported(context));
+        && (!codecInfo.secure || DummySurface.isSecureSupported(context));
   }
 
   @RequiresApi(17)
-  private void releasePlaceholderSurface() {
-    if (surface == placeholderSurface) {
+  private void releaseDummySurface() {
+    if (surface == dummySurface) {
       surface = null;
     }
-    placeholderSurface.release();
-    placeholderSurface = null;
+    dummySurface.release();
+    dummySurface = null;
   }
 
   private void setJoiningDeadlineMs() {
@@ -1658,6 +1580,82 @@ public class MediaCodecVideoRenderer extends MediaCodecRenderer {
     } else {
       return getCodecMaxInputSize(codecInfo, format);
     }
+  }
+
+  /**
+   * Returns a maximum input size for a given codec and format.
+   *
+   * @param codecInfo Information about the {@link MediaCodec} being configured.
+   * @param format The format.
+   * @return A maximum input size in bytes, or {@link Format#NO_VALUE} if a maximum could not be
+   *     determined.
+   */
+  private static int getCodecMaxInputSize(MediaCodecInfo codecInfo, Format format) {
+    int width = format.width;
+    int height = format.height;
+    if (width == Format.NO_VALUE || height == Format.NO_VALUE) {
+      // We can't infer a maximum input size without video dimensions.
+      return Format.NO_VALUE;
+    }
+
+    String sampleMimeType = format.sampleMimeType;
+    if (MimeTypes.VIDEO_DOLBY_VISION.equals(sampleMimeType)) {
+      // Dolby vision can be a wrapper around H264 or H265. We assume it's wrapping H265 by default
+      // because it's the common case, and because some devices may fail to allocate the codec when
+      // the larger buffer size required for H264 is requested. We size buffers for H264 only if the
+      // format contains sufficient information for us to determine unambiguously that it's a H264
+      // profile.
+      sampleMimeType = MimeTypes.VIDEO_H265;
+      @Nullable
+      Pair<Integer, Integer> codecProfileAndLevel = MediaCodecUtil.getCodecProfileAndLevel(format);
+      if (codecProfileAndLevel != null) {
+        int profile = codecProfileAndLevel.first;
+        if (profile == CodecProfileLevel.DolbyVisionProfileDvavSe
+            || profile == CodecProfileLevel.DolbyVisionProfileDvavPer
+            || profile == CodecProfileLevel.DolbyVisionProfileDvavPen) {
+          sampleMimeType = MimeTypes.VIDEO_H264;
+        }
+      }
+    }
+
+    // Attempt to infer a maximum input size from the format.
+    int maxPixels;
+    int minCompressionRatio;
+    switch (sampleMimeType) {
+      case MimeTypes.VIDEO_H263:
+      case MimeTypes.VIDEO_MP4V:
+        maxPixels = width * height;
+        minCompressionRatio = 2;
+        break;
+      case MimeTypes.VIDEO_H264:
+        if ("BRAVIA 4K 2015".equals(Util.MODEL) // Sony Bravia 4K
+            || ("Amazon".equals(Util.MANUFACTURER)
+                && ("KFSOWI".equals(Util.MODEL) // Kindle Soho
+                    || ("AFTS".equals(Util.MODEL) && codecInfo.secure)))) { // Fire TV Gen 2
+          // Use the default value for cases where platform limitations may prevent buffers of the
+          // calculated maximum input size from being allocated.
+          return Format.NO_VALUE;
+        }
+        // Round up width/height to an integer number of macroblocks.
+        maxPixels = Util.ceilDivide(width, 16) * Util.ceilDivide(height, 16) * 16 * 16;
+        minCompressionRatio = 2;
+        break;
+      case MimeTypes.VIDEO_VP8:
+        // VPX does not specify a ratio so use the values from the platform's SoftVPX.cpp.
+        maxPixels = width * height;
+        minCompressionRatio = 2;
+        break;
+      case MimeTypes.VIDEO_H265:
+      case MimeTypes.VIDEO_VP9:
+        maxPixels = width * height;
+        minCompressionRatio = 4;
+        break;
+      default:
+        // Leave the default max input size.
+        return Format.NO_VALUE;
+    }
+    // Estimate the maximum input size assuming three channel 4:2:0 subsampled input frames.
+    return (maxPixels * 3) / (2 * minCompressionRatio);
   }
 
   /**

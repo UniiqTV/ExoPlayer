@@ -42,7 +42,7 @@ import com.google.android.exoplayer2.Player.DiscontinuityReason;
 import com.google.android.exoplayer2.Player.PlaybackSuppressionReason;
 import com.google.android.exoplayer2.Player.TimelineChangeReason;
 import com.google.android.exoplayer2.Timeline;
-import com.google.android.exoplayer2.Tracks;
+import com.google.android.exoplayer2.TracksInfo;
 import com.google.android.exoplayer2.audio.AudioAttributes;
 import com.google.android.exoplayer2.audio.AudioSink;
 import com.google.android.exoplayer2.decoder.DecoderCounters;
@@ -54,9 +54,10 @@ import com.google.android.exoplayer2.metadata.MetadataOutput;
 import com.google.android.exoplayer2.source.LoadEventInfo;
 import com.google.android.exoplayer2.source.MediaLoadData;
 import com.google.android.exoplayer2.source.MediaSource.MediaPeriodId;
+import com.google.android.exoplayer2.source.TrackGroupArray;
 import com.google.android.exoplayer2.text.Cue;
-import com.google.android.exoplayer2.text.CueGroup;
 import com.google.android.exoplayer2.trackselection.TrackSelection;
+import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.trackselection.TrackSelectionParameters;
 import com.google.android.exoplayer2.util.FlagSet;
 import com.google.android.exoplayer2.video.VideoDecoderOutputBufferRenderer;
@@ -237,7 +238,10 @@ public interface AnalyticsListener {
    * {@link Player#getCurrentMediaItem()} changed or the player started repeating the current item.
    */
   int EVENT_MEDIA_ITEM_TRANSITION = Player.EVENT_MEDIA_ITEM_TRANSITION;
-  /** {@link Player#getCurrentTracks()} changed. */
+  /**
+   * {@link Player#getCurrentTracksInfo()}, {@link Player#getCurrentTrackGroups()} or {@link
+   * Player#getCurrentTrackSelections()} changed.
+   */
   int EVENT_TRACKS_CHANGED = Player.EVENT_TRACKS_CHANGED;
   /** {@link Player#isLoading()} ()} changed. */
   int EVENT_IS_LOADING_CHANGED = Player.EVENT_IS_LOADING_CHANGED;
@@ -668,9 +672,7 @@ public interface AnalyticsListener {
    */
   default void onIsLoadingChanged(EventTime eventTime, boolean isLoading) {}
 
-  /**
-   * @deprecated Use {@link #onIsLoadingChanged(EventTime, boolean)} instead.
-   */
+  /** @deprecated Use {@link #onIsLoadingChanged(EventTime, boolean)} instead. */
   @Deprecated
   default void onLoadingChanged(EventTime eventTime, boolean isLoading) {}
 
@@ -705,12 +707,24 @@ public interface AnalyticsListener {
   default void onPlayerErrorChanged(EventTime eventTime, @Nullable PlaybackException error) {}
 
   /**
-   * Called when the tracks change.
+   * Called when the available or selected tracks for the renderers changed.
    *
    * @param eventTime The event time.
-   * @param tracks The tracks. Never null, but may be of length zero.
+   * @param trackGroups The available tracks. May be empty.
+   * @param trackSelections The track selections for each renderer. May contain null elements.
+   * @deprecated Use {@link #onTracksInfoChanged}.
    */
-  default void onTracksChanged(EventTime eventTime, Tracks tracks) {}
+  @Deprecated
+  default void onTracksChanged(
+      EventTime eventTime, TrackGroupArray trackGroups, TrackSelectionArray trackSelections) {}
+
+  /**
+   * Called when the available or selected tracks change.
+   *
+   * @param eventTime The event time.
+   * @param tracksInfo The available tracks information. Never null, but may be of length zero.
+   */
+  default void onTracksInfoChanged(EventTime eventTime, TracksInfo tracksInfo) {}
 
   /**
    * Called when track selection parameters change.
@@ -833,30 +847,15 @@ public interface AnalyticsListener {
   /**
    * Called when there is a change in the {@link Cue Cues}.
    *
-   * <p>Both {@link #onCues(EventTime, List)} and {@link #onCues(EventTime, CueGroup)} are called
-   * when there is a change in the cues. You should only implement one or the other.
+   * <p>{@code cues} is in ascending order of priority. If any of the cue boxes overlap when
+   * displayed, the {@link Cue} nearer the end of the list should be shown on top.
    *
    * @param eventTime The event time.
-   * @param cues The {@link Cue Cues}.
-   * @deprecated Use {@link #onCues(EventTime, CueGroup)} instead.
+   * @param cues The {@link Cue Cues}. May be empty.
    */
-  @Deprecated
   default void onCues(EventTime eventTime, List<Cue> cues) {}
 
-  /**
-   * Called when there is a change in the {@link CueGroup}.
-   *
-   * <p>Both {@link #onCues(EventTime, List)} and {@link #onCues(EventTime, CueGroup)} are called
-   * when there is a change in the cues. You should only implement one or the other.
-   *
-   * @param eventTime The event time.
-   * @param cueGroup The {@link CueGroup}.
-   */
-  default void onCues(EventTime eventTime, CueGroup cueGroup) {}
-
-  /**
-   * @deprecated Use {@link #onAudioEnabled} and {@link #onVideoEnabled} instead.
-   */
+  /** @deprecated Use {@link #onAudioEnabled} and {@link #onVideoEnabled} instead. */
   @Deprecated
   default void onDecoderEnabled(
       EventTime eventTime, int trackType, DecoderCounters decoderCounters) {}
@@ -876,9 +875,7 @@ public interface AnalyticsListener {
   @Deprecated
   default void onDecoderInputFormatChanged(EventTime eventTime, int trackType, Format format) {}
 
-  /**
-   * @deprecated Use {@link #onAudioDisabled} and {@link #onVideoDisabled} instead.
-   */
+  /** @deprecated Use {@link #onAudioDisabled} and {@link #onVideoDisabled} instead. */
   @Deprecated
   default void onDecoderDisabled(
       EventTime eventTime, int trackType, DecoderCounters decoderCounters) {}
@@ -907,9 +904,7 @@ public interface AnalyticsListener {
       long initializedTimestampMs,
       long initializationDurationMs) {}
 
-  /**
-   * @deprecated Use {@link #onAudioDecoderInitialized(EventTime, String, long, long)}.
-   */
+  /** @deprecated Use {@link #onAudioDecoderInitialized(EventTime, String, long, long)}. */
   @Deprecated
   default void onAudioDecoderInitialized(
       EventTime eventTime, String decoderName, long initializationDurationMs) {}
@@ -1078,9 +1073,7 @@ public interface AnalyticsListener {
       long initializedTimestampMs,
       long initializationDurationMs) {}
 
-  /**
-   * @deprecated Use {@link #onVideoDecoderInitialized(EventTime, String, long, long)}.
-   */
+  /** @deprecated Use {@link #onVideoDecoderInitialized(EventTime, String, long, long)}. */
   @Deprecated
   default void onVideoDecoderInitialized(
       EventTime eventTime, String decoderName, long initializationDurationMs) {}
@@ -1186,9 +1179,7 @@ public interface AnalyticsListener {
    */
   default void onVideoSizeChanged(EventTime eventTime, VideoSize videoSize) {}
 
-  /**
-   * @deprecated Implement {@link #onVideoSizeChanged(EventTime eventTime, VideoSize)} instead.
-   */
+  /** @deprecated Implement {@link #onVideoSizeChanged(EventTime eventTime, VideoSize)} instead. */
   @Deprecated
   default void onVideoSizeChanged(
       EventTime eventTime,
@@ -1208,9 +1199,7 @@ public interface AnalyticsListener {
    */
   default void onSurfaceSizeChanged(EventTime eventTime, int width, int height) {}
 
-  /**
-   * @deprecated Implement {@link #onDrmSessionAcquired(EventTime, int)} instead.
-   */
+  /** @deprecated Implement {@link #onDrmSessionAcquired(EventTime, int)} instead. */
   @Deprecated
   default void onDrmSessionAcquired(EventTime eventTime) {}
 

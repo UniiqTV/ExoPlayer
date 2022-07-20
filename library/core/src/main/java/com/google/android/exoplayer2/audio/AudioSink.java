@@ -104,8 +104,13 @@ public interface AudioSink {
     /** Called when the offload buffer has been partially emptied. */
     default void onOffloadBufferEmptying() {}
 
-    /** Called when the offload buffer has been filled completely. */
-    default void onOffloadBufferFull() {}
+    /**
+     * Called when the offload buffer has been filled completely.
+     *
+     * @param bufferEmptyingDeadlineMs Maximum time in milliseconds until {@link
+     *     #onOffloadBufferEmptying()} will be called.
+     */
+    default void onOffloadBufferFull(long bufferEmptyingDeadlineMs) {}
 
     /**
      * Called when {@link AudioSink} has encountered an error.

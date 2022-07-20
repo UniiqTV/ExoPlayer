@@ -397,6 +397,27 @@ public class PlaybackException extends Exception implements Bundleable {
 
   // Bundleable implementation.
 
+  /**
+   * Identifiers for fields in a {@link Bundle} which represents a playback exception. Subclasses
+   * may use {@link #FIELD_CUSTOM_ID_BASE} to generate more keys using {@link #keyForField(int)}.
+   *
+   * <p>Note: Changes to the Bundleable implementation must be backwards compatible, so as to avoid
+   * breaking communication across different Bundleable implementation versions.
+   */
+  @Documented
+  @Retention(RetentionPolicy.SOURCE)
+  @Target(TYPE_USE)
+  @IntDef(
+      open = true,
+      value = {
+        FIELD_INT_ERROR_CODE,
+        FIELD_LONG_TIMESTAMP_MS,
+        FIELD_STRING_MESSAGE,
+        FIELD_STRING_CAUSE_CLASS_NAME,
+        FIELD_STRING_CAUSE_MESSAGE,
+      })
+  protected @interface FieldNumber {}
+
   private static final int FIELD_INT_ERROR_CODE = 0;
   private static final int FIELD_LONG_TIMESTAMP_MS = 1;
   private static final int FIELD_STRING_MESSAGE = 2;
@@ -404,7 +425,7 @@ public class PlaybackException extends Exception implements Bundleable {
   private static final int FIELD_STRING_CAUSE_MESSAGE = 4;
 
   /**
-   * Defines a minimum field ID value for subclasses to use when implementing {@link #toBundle()}
+   * Defines a minimum field id value for subclasses to use when implementing {@link #toBundle()}
    * and {@link Bundleable.Creator}.
    *
    * <p>Subclasses should obtain their {@link Bundle Bundle's} field keys by applying a non-negative
@@ -431,13 +452,10 @@ public class PlaybackException extends Exception implements Bundleable {
   }
 
   /**
-   * Converts the given field number to a string which can be used as a field key when implementing
-   * {@link #toBundle()} and {@link Bundleable.Creator}.
-   *
-   * <p>Subclasses should use {@code field} values greater than or equal to {@link
-   * #FIELD_CUSTOM_ID_BASE}.
+   * Converts the given {@link FieldNumber} to a string which can be used as a field key when
+   * implementing {@link #toBundle()} and {@link Bundleable.Creator}.
    */
-  protected static String keyForField(int field) {
+  protected static String keyForField(@FieldNumber int field) {
     return Integer.toString(field, Character.MAX_RADIX);
   }
 
