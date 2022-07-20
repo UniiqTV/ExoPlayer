@@ -27,7 +27,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
 import com.google.android.exoplayer2.C;
-import com.google.android.exoplayer2.util.GlProgram;
 import com.google.android.exoplayer2.util.GlUtil;
 import java.io.IOException;
 import java.util.Locale;
@@ -51,7 +50,7 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
   private final Bitmap logoBitmap;
   private final Canvas overlayCanvas;
 
-  private @MonotonicNonNull GlProgram program;
+  private GlUtil.@MonotonicNonNull Program program;
 
   private float bitmapScaleX;
   private float bitmapScaleY;
@@ -79,7 +78,7 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
   public void initialize() {
     try {
       program =
-          new GlProgram(
+          new GlUtil.Program(
               context,
               /* vertexShaderFilePath= */ "bitmap_overlay_video_processor_vertex.glsl",
               /* fragmentShaderFilePath= */ "bitmap_overlay_video_processor_fragment.glsl");
@@ -87,13 +86,9 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
       throw new IllegalStateException(e);
     }
     program.setBufferAttribute(
-        "aFramePosition",
-        GlUtil.getNormalizedCoordinateBounds(),
-        GlUtil.HOMOGENEOUS_COORDINATE_VECTOR_SIZE);
+        "aFramePosition", GlUtil.getNormalizedCoordinateBounds(), GlUtil.RECTANGLE_VERTICES_COUNT);
     program.setBufferAttribute(
-        "aTexCoords",
-        GlUtil.getTextureCoordinateBounds(),
-        GlUtil.HOMOGENEOUS_COORDINATE_VECTOR_SIZE);
+        "aTexCoords", GlUtil.getTextureCoordinateBounds(), GlUtil.RECTANGLE_VERTICES_COUNT);
     GLES20.glGenTextures(1, textures, 0);
     GLES20.glBindTexture(GL10.GL_TEXTURE_2D, textures[0]);
     GLES20.glTexParameterf(GL10.GL_TEXTURE_2D, GL10.GL_TEXTURE_MIN_FILTER, GL10.GL_NEAREST);
@@ -122,9 +117,9 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
     GlUtil.checkGlError();
 
     // Run the shader program.
-    GlProgram program = checkNotNull(this.program);
-    program.setSamplerTexIdUniform("uTexSampler0", frameTexture, /* texUnitIndex= */ 0);
-    program.setSamplerTexIdUniform("uTexSampler1", textures[0], /* texUnitIndex= */ 1);
+    GlUtil.Program program = checkNotNull(this.program);
+    program.setSamplerTexIdUniform("uTexSampler0", frameTexture, /* unit= */ 0);
+    program.setSamplerTexIdUniform("uTexSampler1", textures[0], /* unit= */ 1);
     program.setFloatUniform("uScaleX", bitmapScaleX);
     program.setFloatUniform("uScaleY", bitmapScaleY);
     program.setFloatsUniform("uTexTransform", transformMatrix);

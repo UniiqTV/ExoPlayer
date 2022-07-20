@@ -23,19 +23,10 @@ public interface TextOutput {
   /**
    * Called when there is a change in the {@link Cue Cues}.
    *
-   * <p>Both {@link #onCues(List)} and {@link #onCues(CueGroup)} are called when there is a change
-   * in the cues. You should only implement one or the other.
+   * <p>{@code cues} is in ascending order of priority. If any of the cue boxes overlap when
+   * displayed, the {@link Cue} nearer the end of the list should be shown on top.
    *
-   * @deprecated Use {@link #onCues(CueGroup)} instead.
+   * @param cues The {@link Cue Cues}. May be empty.
    */
-  @Deprecated
-  default void onCues(List<Cue> cues) {}
-
-  /**
-   * Called when there is a change in the {@link CueGroup}.
-   *
-   * <p>Both {@link #onCues(List)} and {@link #onCues(CueGroup)} are called when there is a change
-   * in the cues You should only implement one or the other.
-   */
-  void onCues(CueGroup cueGroup);
+  void onCues(List<Cue> cues);
 }

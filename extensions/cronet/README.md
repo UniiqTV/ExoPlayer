@@ -38,9 +38,8 @@ If your application only needs to play http(s) content, using the Cronet
 extension is as simple as updating `DataSource.Factory` instantiations in your
 application code to use `CronetDataSource.Factory`. If your application also
 needs to play non-http(s) content such as local files, use:
-
 ```
-new DefaultDataSource.Factory(
+new DefaultDataSourceFactory(
     ...
     /* baseDataSourceFactory= */ new CronetDataSource.Factory(...) );
 ```

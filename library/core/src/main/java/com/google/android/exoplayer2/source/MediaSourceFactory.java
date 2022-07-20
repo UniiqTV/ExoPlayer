@@ -21,9 +21,7 @@ import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.drm.DrmSessionManagerProvider;
 import com.google.android.exoplayer2.upstream.LoadErrorHandlingPolicy;
 
-/**
- * @deprecated Use {@link MediaSource.Factory}.
- */
+/** @deprecated Use {@link MediaSource.Factory}. */
 @Deprecated
 public interface MediaSourceFactory extends MediaSource.Factory {
 

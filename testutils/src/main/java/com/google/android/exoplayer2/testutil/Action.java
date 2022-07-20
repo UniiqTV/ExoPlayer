@@ -321,9 +321,7 @@ public abstract class Action {
   /** Calls {@link ExoPlayer#clearMediaItems()}}. */
   public static class ClearMediaItems extends Action {
 
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public ClearMediaItems(String tag) {
       super(tag, "ClearMediaItems");
     }
@@ -426,9 +424,7 @@ public abstract class Action {
   /** Calls {@link ExoPlayer#clearVideoSurface()}. */
   public static final class ClearVideoSurface extends Action {
 
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public ClearVideoSurface(String tag) {
       super(tag, "ClearVideoSurface");
     }
@@ -443,9 +439,7 @@ public abstract class Action {
   /** Calls {@link ExoPlayer#setVideoSurface(Surface)}. */
   public static final class SetVideoSurface extends Action {
 
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public SetVideoSurface(String tag) {
       super(tag, "SetVideoSurface");
     }
@@ -484,9 +478,7 @@ public abstract class Action {
 
   /** Calls {@link ExoPlayer#prepare()}. */
   public static final class Prepare extends Action {
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public Prepare(String tag) {
       super(tag, "Prepare");
     }
@@ -823,9 +815,7 @@ public abstract class Action {
    */
   public static final class WaitForPositionDiscontinuity extends Action {
 
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public WaitForPositionDiscontinuity(String tag) {
       super(tag, "WaitForPositionDiscontinuity");
     }
@@ -1054,9 +1044,7 @@ public abstract class Action {
   /** Waits until the player acknowledged all pending player commands. */
   public static final class WaitForPendingPlayerCommands extends Action {
 
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public WaitForPendingPlayerCommands(String tag) {
       super(tag, "WaitForPendingPlayerCommands");
     }
@@ -1093,9 +1081,7 @@ public abstract class Action {
 
     private final Runnable runnable;
 
-    /**
-     * @param tag A tag to use for logging.
-     */
+    /** @param tag A tag to use for logging. */
     public ExecuteRunnable(@Size(max = 23) String tag, Runnable runnable) {
       super(tag, "ExecuteRunnable");
       this.runnable = runnable;

@@ -21,7 +21,6 @@ import static com.google.android.exoplayer2.util.Util.castNonNull;
 import android.graphics.Typeface;
 import android.text.Layout;
 import android.text.SpannableString;
-import android.text.style.BackgroundColorSpan;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StrikethroughSpan;
 import android.text.style.StyleSpan;
@@ -316,13 +315,6 @@ public final class SsaDecoder extends SimpleSubtitleDecoder {
       if (style.primaryColor != null) {
         spannableText.setSpan(
             new ForegroundColorSpan(style.primaryColor),
-            /* start= */ 0,
-            /* end= */ spannableText.length(),
-            SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);
-      }
-      if (style.borderStyle == SsaStyle.SSA_BORDER_STYLE_BOX && style.outlineColor != null) {
-        spannableText.setSpan(
-            new BackgroundColorSpan(style.outlineColor),
             /* start= */ 0,
             /* end= */ spannableText.length(),
             SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE);

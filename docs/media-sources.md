@@ -34,10 +34,9 @@ these requirements and injected during player construction:
 
 ~~~
 MediaSource.Factory mediaSourceFactory =
-    new DefaultMediaSourceFactory(context)
-        .setDataSourceFactory(cacheDataSourceFactory)
-        .setLocalAdInsertionComponents(
-             adsLoaderProvider, /* adViewProvider= */ playerView);
+    new DefaultMediaSourceFactory(cacheDataSourceFactory)
+        .setAdsLoaderProvider(adsLoaderProvider)
+        .setAdViewProvider(playerView);
 ExoPlayer player = new ExoPlayer.Builder(context)
     .setMediaSourceFactory(mediaSourceFactory)
     .build();

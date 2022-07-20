@@ -25,6 +25,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
+import com.google.android.exoplayer2.decoder.DecoderInputBuffer;
 import com.google.android.exoplayer2.metadata.Metadata;
 import com.google.android.exoplayer2.metadata.mp4.SlowMotionData;
 import com.google.android.exoplayer2.metadata.mp4.SmtaMetadataEntry;
@@ -105,15 +106,9 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
    * segments into account, in microseconds.
    */
   private long frameTimeDeltaUs;
-  /**
-   * The presentation time for the last {@linkplain #dropOrTransformSample(ByteBuffer, long)
-   * processed sample}.
-   */
-  private long lastSamplePresentationTimeUs;
 
   public SefSlowMotionFlattener(Format format) {
     scratch = new byte[NAL_START_CODE_LENGTH];
-    lastSamplePresentationTimeUs = C.TIME_UNSET;
     MetadataInfo metadataInfo = getMetadataInfo(format.metadata);
     slowMotionData = metadataInfo.slowMotionData;
     List<SlowMotionData.Segment> segments =
@@ -137,45 +132,34 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
    * Applies slow motion flattening by either indicating that the buffer's data should be dropped or
    * transforming it in place.
    *
-   * <p>After calling this method, call {@link #getSamplePresentationTimeUs()} to get the new
-   * presentation time for the sample (whether it was dropped or not).
-   *
    * @return Whether the buffer should be dropped.
    */
-  public boolean dropOrTransformSample(ByteBuffer buffer, long bufferTimeUs) {
+  @RequiresNonNull("#1.data")
+  public boolean dropOrTransformSample(DecoderInputBuffer buffer) {
     if (slowMotionData == null) {
       // The input is not an SEF slow motion video.
-      lastSamplePresentationTimeUs = bufferTimeUs;
       return false;
     }
 
-    int originalPosition = buffer.position();
-    buffer.position(originalPosition + NAL_START_CODE_LENGTH);
-    buffer.get(scratch, 0, 4); // Read nal_unit_header_svc_extension.
+    ByteBuffer data = buffer.data;
+    int originalPosition = data.position();
+    data.position(originalPosition + NAL_START_CODE_LENGTH);
+    data.get(scratch, 0, 4); // Read nal_unit_header_svc_extension.
     int nalUnitType = scratch[0] & 0x1F;
     boolean svcExtensionFlag = ((scratch[1] & 0xFF) >> 7) == 1;
     checkState(
         nalUnitType == NAL_UNIT_TYPE_PREFIX && svcExtensionFlag,
         "Missing SVC extension prefix NAL unit.");
     int layer = (scratch[3] & 0xFF) >> 5;
-    boolean shouldKeepFrame = processCurrentFrame(layer, bufferTimeUs);
+    boolean shouldKeepFrame = processCurrentFrame(layer, buffer.timeUs);
     // Update the timestamp regardless of whether the buffer is dropped as the timestamp may be
     // reused for the empty end-of-stream buffer.
-    lastSamplePresentationTimeUs = getCurrentFrameOutputTimeUs(bufferTimeUs);
+    buffer.timeUs = getCurrentFrameOutputTimeUs(/* inputTimeUs= */ buffer.timeUs);
     if (shouldKeepFrame) {
-      buffer.position(originalPosition);
+      data.position(originalPosition);
       return false;
     }
     return true;
-  }
-
-  /**
-   * Returns the new presentation time for the last sample handled via {@link
-   * #dropOrTransformSample(ByteBuffer, long)}.
-   */
-  public long getSamplePresentationTimeUs() {
-    checkState(lastSamplePresentationTimeUs != C.TIME_UNSET);
-    return lastSamplePresentationTimeUs;
   }
 
   /**
@@ -263,8 +247,8 @@ import org.checkerframework.checker.nullness.qual.RequiresNonNull;
    * output frame rate might be variable.
    *
    * <p>This method can only be called if all the frames until the current one (included) have been
-   * {@linkplain #processCurrentFrame(int, long) processed} in order, and if the next frames have
-   * not been processed yet.
+   * {@link #processCurrentFrame(int, long) processed} in order, and if the next frames have not
+   * been processed yet.
    */
   @VisibleForTesting
   /* package */ long getCurrentFrameOutputTimeUs(long inputTimeUs) {

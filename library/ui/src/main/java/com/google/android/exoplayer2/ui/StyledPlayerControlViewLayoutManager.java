@@ -604,15 +604,13 @@ import java.util.List;
     }
 
     if (timeBar != null) {
+      MarginLayoutParams timeBarParams = (MarginLayoutParams) timeBar.getLayoutParams();
       int timeBarMarginBottom =
           playerControlView
               .getResources()
               .getDimensionPixelSize(R.dimen.exo_styled_progress_margin_bottom);
-      @Nullable MarginLayoutParams timeBarParams = (MarginLayoutParams) timeBar.getLayoutParams();
-      if (timeBarParams != null) {
-        timeBarParams.bottomMargin = (isMinimalMode ? 0 : timeBarMarginBottom);
-        timeBar.setLayoutParams(timeBarParams);
-      }
+      timeBarParams.bottomMargin = (isMinimalMode ? 0 : timeBarMarginBottom);
+      timeBar.setLayoutParams(timeBarParams);
       if (timeBar instanceof DefaultTimeBar) {
         DefaultTimeBar defaultTimeBar = (DefaultTimeBar) timeBar;
         if (isMinimalMode) {

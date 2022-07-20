@@ -1135,7 +1135,7 @@ public final class MediaPeriodQueueTest {
         new TrackSelectorResult(
             new RendererConfiguration[0],
             new ExoTrackSelection[0],
-            Tracks.EMPTY,
+            TracksInfo.EMPTY,
             /* info= */ null));
   }
 
@@ -1280,7 +1280,7 @@ public final class MediaPeriodQueueTest {
           countDownLatch.countDown();
         },
         /* mediaTransferListener= */ null,
-        PlayerId.UNSET);
+        new PlayerId());
     if (!countDownLatch.await(/* timeout= */ 2, SECONDS)) {
       fail();
     }

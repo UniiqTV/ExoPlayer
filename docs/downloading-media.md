@@ -319,8 +319,7 @@ DataSource.Factory cacheDataSourceFactory =
 
 ExoPlayer player = new ExoPlayer.Builder(context)
     .setMediaSourceFactory(
-        new DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(cacheDataSourceFactory))
+        new DefaultMediaSourceFactory(cacheDataSourceFactory))
     .build();
 ~~~
 {: .language-java}

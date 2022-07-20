@@ -25,10 +25,8 @@ import androidx.annotation.Nullable;
 import com.google.android.exoplayer2.Bundleable;
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.Format;
-import com.google.android.exoplayer2.Tracks;
 import com.google.android.exoplayer2.util.BundleableUtil;
 import com.google.android.exoplayer2.util.Log;
-import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import java.lang.annotation.Documented;
@@ -38,25 +36,7 @@ import java.lang.annotation.Target;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * An immutable group of tracks available within a media stream. All tracks in a group present the
- * same content, but their formats may differ.
- *
- * <p>As an example of how tracks can be grouped, consider an adaptive playback where a main video
- * feed is provided in five resolutions, and an alternative video feed (e.g., a different camera
- * angle in a sports match) is provided in two resolutions. In this case there will be two video
- * track groups, one corresponding to the main video feed containing five tracks, and a second for
- * the alternative video feed containing two tracks.
- *
- * <p>Note that audio tracks whose languages differ are not grouped, because content in different
- * languages is not considered to be the same. Conversely, audio tracks in the same language that
- * only differ in properties such as bitrate, sampling rate, channel count and so on can be grouped.
- * This also applies to text tracks.
- *
- * <p>Note also that this class only contains information derived from the media itself. Unlike
- * {@link Tracks.Group}, it does not include runtime information such as the extent to which
- * playback of each track is supported by the device, or which tracks are currently selected.
- */
+/** Defines an immutable group of tracks identified by their format identity. */
 public final class TrackGroup implements Bundleable {
 
   private static final String TAG = "TrackGroup";
@@ -65,8 +45,6 @@ public final class TrackGroup implements Bundleable {
   public final int length;
   /** An identifier for the track group. */
   public final String id;
-  /** The type of tracks in the group. */
-  public final @C.TrackType int type;
 
   private final Format[] formats;
 
@@ -93,11 +71,6 @@ public final class TrackGroup implements Bundleable {
     this.id = id;
     this.formats = formats;
     this.length = formats.length;
-    @C.TrackType int type = MimeTypes.getTrackType(formats[0].sampleMimeType);
-    if (type == C.TRACK_TYPE_UNKNOWN) {
-      type = MimeTypes.getTrackType(formats[0].containerMimeType);
-    }
-    this.type = type;
     verifyCorrectness();
   }
 
@@ -160,7 +133,7 @@ public final class TrackGroup implements Bundleable {
       return false;
     }
     TrackGroup other = (TrackGroup) obj;
-    return id.equals(other.id) && Arrays.equals(formats, other.formats);
+    return length == other.length && id.equals(other.id) && Arrays.equals(formats, other.formats);
   }
 
   // Bundleable implementation.
@@ -186,12 +159,11 @@ public final class TrackGroup implements Bundleable {
   /** Object that can restore {@code TrackGroup} from a {@link Bundle}. */
   public static final Creator<TrackGroup> CREATOR =
       bundle -> {
-        @Nullable
-        List<Bundle> formatBundles = bundle.getParcelableArrayList(keyForField(FIELD_FORMATS));
         List<Format> formats =
-            formatBundles == null
-                ? ImmutableList.of()
-                : BundleableUtil.fromBundleList(Format.CREATOR, formatBundles);
+            BundleableUtil.fromBundleNullableList(
+                Format.CREATOR,
+                bundle.getParcelableArrayList(keyForField(FIELD_FORMATS)),
+                ImmutableList.of());
         String id = bundle.getString(keyForField(FIELD_ID), /* defaultValue= */ "");
         return new TrackGroup(id, formats.toArray(new Format[0]));
       };

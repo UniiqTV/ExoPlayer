@@ -35,14 +35,10 @@ public interface Clock {
    */
   long currentTimeMillis();
 
-  /**
-   * @see android.os.SystemClock#elapsedRealtime()
-   */
+  /** @see android.os.SystemClock#elapsedRealtime() */
   long elapsedRealtime();
 
-  /**
-   * @see android.os.SystemClock#uptimeMillis()
-   */
+  /** @see android.os.SystemClock#uptimeMillis() */
   long uptimeMillis();
 
   /**

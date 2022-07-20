@@ -15,7 +15,8 @@
  */
 package com.google.android.exoplayer2.demo;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.android.exoplayer2.util.Assertions.checkNotNull;
+import static com.google.android.exoplayer2.util.Assertions.checkStateNotNull;
 
 import android.content.Context;
 import android.content.DialogInterface;
@@ -28,7 +29,6 @@ import androidx.fragment.app.FragmentManager;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.MediaItem;
 import com.google.android.exoplayer2.RenderersFactory;
-import com.google.android.exoplayer2.Tracks;
 import com.google.android.exoplayer2.drm.DrmInitData;
 import com.google.android.exoplayer2.drm.DrmSession;
 import com.google.android.exoplayer2.drm.DrmSessionEventListener;
@@ -43,9 +43,9 @@ import com.google.android.exoplayer2.offline.DownloadRequest;
 import com.google.android.exoplayer2.offline.DownloadService;
 import com.google.android.exoplayer2.source.TrackGroup;
 import com.google.android.exoplayer2.source.TrackGroupArray;
+import com.google.android.exoplayer2.trackselection.DefaultTrackSelector;
 import com.google.android.exoplayer2.trackselection.MappingTrackSelector.MappedTrackInfo;
-import com.google.android.exoplayer2.trackselection.TrackSelectionParameters;
-import com.google.android.exoplayer2.upstream.DataSource;
+import com.google.android.exoplayer2.upstream.HttpDataSource;
 import com.google.android.exoplayer2.util.Log;
 import com.google.android.exoplayer2.util.Util;
 import java.io.IOException;
@@ -65,26 +65,31 @@ public class DownloadTracker {
   private static final String TAG = "DownloadTracker";
 
   private final Context context;
-  private final DataSource.Factory dataSourceFactory;
+  private final HttpDataSource.Factory httpDataSourceFactory;
   private final CopyOnWriteArraySet<Listener> listeners;
   private final HashMap<Uri, Download> downloads;
   private final DownloadIndex downloadIndex;
+  private final DefaultTrackSelector.Parameters trackSelectorParameters;
 
   @Nullable private StartDownloadDialogHelper startDownloadDialogHelper;
 
   public DownloadTracker(
-      Context context, DataSource.Factory dataSourceFactory, DownloadManager downloadManager) {
+      Context context,
+      HttpDataSource.Factory httpDataSourceFactory,
+      DownloadManager downloadManager) {
     this.context = context.getApplicationContext();
-    this.dataSourceFactory = dataSourceFactory;
+    this.httpDataSourceFactory = httpDataSourceFactory;
     listeners = new CopyOnWriteArraySet<>();
     downloads = new HashMap<>();
     downloadIndex = downloadManager.getDownloadIndex();
+    trackSelectorParameters = DownloadHelper.getDefaultTrackSelectorParameters(context);
     downloadManager.addListener(new DownloadManagerListener());
     loadDownloads();
   }
 
   public void addListener(Listener listener) {
-    listeners.add(checkNotNull(listener));
+    checkNotNull(listener);
+    listeners.add(listener);
   }
 
   public void removeListener(Listener listener) {
@@ -115,7 +120,8 @@ public class DownloadTracker {
       startDownloadDialogHelper =
           new StartDownloadDialogHelper(
               fragmentManager,
-              DownloadHelper.forMediaItem(context, mediaItem, renderersFactory, dataSourceFactory),
+              DownloadHelper.forMediaItem(
+                  context, mediaItem, renderersFactory, httpDataSourceFactory),
               mediaItem);
     }
   }
@@ -153,7 +159,7 @@ public class DownloadTracker {
 
   private final class StartDownloadDialogHelper
       implements DownloadHelper.Callback,
-          TrackSelectionDialog.TrackSelectionListener,
+          DialogInterface.OnClickListener,
           DialogInterface.OnDismissListener {
 
     private final FragmentManager fragmentManager;
@@ -161,6 +167,7 @@ public class DownloadTracker {
     private final MediaItem mediaItem;
 
     private TrackSelectionDialog trackSelectionDialog;
+    private MappedTrackInfo mappedTrackInfo;
     private WidevineOfflineLicenseFetchTask widevineOfflineLicenseFetchTask;
     @Nullable private byte[] keySetId;
 
@@ -213,7 +220,7 @@ public class DownloadTracker {
           new WidevineOfflineLicenseFetchTask(
               format,
               mediaItem.localConfiguration.drmConfiguration,
-              dataSourceFactory,
+              httpDataSourceFactory,
               /* dialogHelper= */ this,
               helper);
       widevineOfflineLicenseFetchTask.execute();
@@ -230,13 +237,21 @@ public class DownloadTracker {
       Log.e(TAG, logMessage, e);
     }
 
-    // TrackSelectionListener implementation.
+    // DialogInterface.OnClickListener implementation.
 
     @Override
-    public void onTracksSelected(TrackSelectionParameters trackSelectionParameters) {
+    public void onClick(DialogInterface dialog, int which) {
       for (int periodIndex = 0; periodIndex < downloadHelper.getPeriodCount(); periodIndex++) {
         downloadHelper.clearTrackSelections(periodIndex);
-        downloadHelper.addTrackSelection(periodIndex, trackSelectionParameters);
+        for (int i = 0; i < mappedTrackInfo.getRendererCount(); i++) {
+          if (!trackSelectionDialog.getIsDisabled(/* rendererIndex= */ i)) {
+            downloadHelper.addTrackSelectionForSingleRenderer(
+                periodIndex,
+                /* rendererIndex= */ i,
+                trackSelectorParameters,
+                trackSelectionDialog.getOverrides(/* rendererIndex= */ i));
+          }
+        }
       }
       DownloadRequest downloadRequest = buildDownloadRequest();
       if (downloadRequest.streamKeys.isEmpty()) {
@@ -301,21 +316,21 @@ public class DownloadTracker {
         return;
       }
 
-      Tracks tracks = downloadHelper.getTracks(/* periodIndex= */ 0);
-      if (!TrackSelectionDialog.willHaveContent(tracks)) {
+      mappedTrackInfo = downloadHelper.getMappedTrackInfo(/* periodIndex= */ 0);
+      if (!TrackSelectionDialog.willHaveContent(mappedTrackInfo)) {
         Log.d(TAG, "No dialog content. Downloading entire stream.");
         startDownload();
         downloadHelper.release();
         return;
       }
       trackSelectionDialog =
-          TrackSelectionDialog.createForTracksAndParameters(
+          TrackSelectionDialog.createForMappedTrackInfoAndParameters(
               /* titleId= */ R.string.exo_download_description,
-              tracks,
-              DownloadHelper.getDefaultTrackSelectorParameters(context),
+              mappedTrackInfo,
+              trackSelectorParameters,
               /* allowAdaptiveSelections= */ false,
               /* allowMultipleOverrides= */ true,
-              /* onTracksSelectedListener= */ this,
+              /* onClickListener= */ this,
               /* onDismissListener= */ this);
       trackSelectionDialog.show(fragmentManager, /* tag= */ null);
     }
@@ -356,7 +371,7 @@ public class DownloadTracker {
 
     private final Format format;
     private final MediaItem.DrmConfiguration drmConfiguration;
-    private final DataSource.Factory dataSourceFactory;
+    private final HttpDataSource.Factory httpDataSourceFactory;
     private final StartDownloadDialogHelper dialogHelper;
     private final DownloadHelper downloadHelper;
 
@@ -366,12 +381,12 @@ public class DownloadTracker {
     public WidevineOfflineLicenseFetchTask(
         Format format,
         MediaItem.DrmConfiguration drmConfiguration,
-        DataSource.Factory dataSourceFactory,
+        HttpDataSource.Factory httpDataSourceFactory,
         StartDownloadDialogHelper dialogHelper,
         DownloadHelper downloadHelper) {
       this.format = format;
       this.drmConfiguration = drmConfiguration;
-      this.dataSourceFactory = dataSourceFactory;
+      this.httpDataSourceFactory = httpDataSourceFactory;
       this.dialogHelper = dialogHelper;
       this.downloadHelper = downloadHelper;
     }
@@ -382,7 +397,7 @@ public class DownloadTracker {
           OfflineLicenseHelper.newWidevineInstance(
               drmConfiguration.licenseUri.toString(),
               drmConfiguration.forceDefaultLicenseUri,
-              dataSourceFactory,
+              httpDataSourceFactory,
               drmConfiguration.licenseRequestHeaders,
               new DrmSessionEventListener.EventDispatcher());
       try {
@@ -400,7 +415,7 @@ public class DownloadTracker {
       if (drmSessionException != null) {
         dialogHelper.onOfflineLicenseFetchedError(drmSessionException);
       } else {
-        dialogHelper.onOfflineLicenseFetched(downloadHelper, checkNotNull(keySetId));
+        dialogHelper.onOfflineLicenseFetched(downloadHelper, checkStateNotNull(keySetId));
       }
     }
   }

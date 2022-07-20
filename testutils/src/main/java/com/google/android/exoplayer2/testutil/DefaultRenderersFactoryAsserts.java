@@ -28,8 +28,9 @@ import com.google.android.exoplayer2.DefaultRenderersFactory;
 import com.google.android.exoplayer2.Renderer;
 import com.google.android.exoplayer2.audio.AudioRendererEventListener;
 import com.google.android.exoplayer2.metadata.Metadata;
-import com.google.android.exoplayer2.text.CueGroup;
+import com.google.android.exoplayer2.text.Cue;
 import com.google.android.exoplayer2.video.VideoRendererEventListener;
+import java.util.List;
 
 /** Assertions for {@link DefaultRenderersFactory}. */
 public final class DefaultRenderersFactoryAsserts {
@@ -93,7 +94,7 @@ public final class DefaultRenderersFactoryAsserts {
         new Handler(Looper.getMainLooper()),
         new VideoRendererEventListener() {},
         new AudioRendererEventListener() {},
-        (CueGroup cueGroup) -> {},
+        (List<Cue> cues) -> {},
         (Metadata metadata) -> {});
   }
 }

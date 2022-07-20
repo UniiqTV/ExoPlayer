@@ -59,13 +59,6 @@ import java.util.TreeMap;
     return entry != null ? entry.getValue() : baseSpeedMultiplier;
   }
 
-  @Override
-  public long getNextSpeedChangeTimeUs(long timeUs) {
-    checkArgument(timeUs >= 0);
-    @Nullable Long nextTimeUs = speedsByStartTimeUs.higherKey(timeUs);
-    return nextTimeUs != null ? nextTimeUs : C.TIME_UNSET;
-  }
-
   private static ImmutableSortedMap<Long, Float> buildSpeedByStartTimeUsMap(
       Format format, float baseSpeed) {
     List<Segment> segments = extractSlowMotionSegments(format);
